@@ -25,6 +25,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TestingWebviewProvider = void 0;
 const vscode = __importStar(require("vscode"));
+const path = __importStar(require("path"));
+const fs = __importStar(require("fs"));
 const accessibilityTester_1 = require("./accessibilityTester");
 class TestingWebviewProvider {
     constructor(_extensionUri, context, agentOrchestrator) {
@@ -142,29 +144,72 @@ class TestingWebviewProvider {
             return;
         }
         try {
+            // Ask user which provider to use
+            const providerChoice = await vscode.window.showQuickPick([
+                { label: 'Azure OpenAI (GPT)', value: 'openai', description: 'Uses Azure OpenAI GPT model' },
+                { label: 'Anthropic (Claude)', value: 'anthropic', description: 'Uses Claude Sonnet' },
+                { label: 'Gemini', value: 'gemini', description: 'Uses Google Gemini' }
+            ], {
+                placeHolder: 'Select AI provider to fix accessibility issues',
+                title: '🔧 Choose AI Provider for Fixing'
+            });
+            if (!providerChoice) {
+                // User cancelled
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'fixingError',
+                        error: 'Provider selection cancelled'
+                    });
+                }
+                return;
+            }
             // Send fixing started message
             this._view.webview.postMessage({
                 type: 'fixingStarted'
             });
             this.outputChannel.appendLine('='.repeat(80));
             this.outputChannel.appendLine(`🔧 Starting Automated Accessibility Fixes`);
+            this.outputChannel.appendLine(`🤖 Using provider: ${providerChoice.label}`);
             this.outputChannel.appendLine('='.repeat(80));
-            // Convert test results to agent prompt
-            const fixPrompt = this._createFixPrompt(testResult);
-            // Start agent session with the fix prompt
-            const sessionId = await this.agentOrchestrator.startSession(fixPrompt, 'anthropic');
-            // Wait for agent to complete (poll session status)
-            await this._waitForAgentCompletion(sessionId);
-            // Send completion message
-            this._view.webview.postMessage({
-                type: 'fixingComplete',
-                summary: {
-                    message: 'Agent has completed fixing accessibility issues. Check the output channel for details.'
+            // Pre-explore workspace to find relevant files
+            this.outputChannel.appendLine('🔍 Pre-analyzing workspace structure...');
+            const workspaceInfo = await this._exploreWorkspace(testResult.url);
+            // Convert test results to agent prompt with workspace context
+            const fixPrompt = this._createEnhancedFixPrompt(testResult, workspaceInfo);
+            // Start agent session with the fix prompt using selected provider
+            const sessionId = await this.agentOrchestrator.startSession(fixPrompt, providerChoice.value);
+            // CRITICAL: Store session start time for timeout detection
+            const sessionStartTime = Date.now();
+            // Wait for agent to complete (poll session status with hard limits)
+            const completionDetails = await this._waitForAgentCompletion(sessionId, sessionStartTime);
+            if (completionDetails.success) {
+                // Send detailed completion message
+                this._view.webview.postMessage({
+                    type: 'fixingComplete',
+                    summary: {
+                        message: completionDetails.summary || 'Agent has completed fixing accessibility issues.',
+                        filesChanged: completionDetails.filesChanged || [],
+                        totalFiles: completionDetails.filesChanged?.length || 0,
+                        issuesFixed: testResult.issues.length
+                    }
+                });
+                this.outputChannel.appendLine('\n' + '='.repeat(80));
+                this.outputChannel.appendLine('✅ Accessibility Fixes Complete');
+                if (completionDetails.filesChanged && completionDetails.filesChanged.length > 0) {
+                    this.outputChannel.appendLine(`📁 Files modified: ${completionDetails.filesChanged.length}`);
+                    completionDetails.filesChanged.forEach(file => {
+                        this.outputChannel.appendLine(`   - ${file}`);
+                    });
                 }
-            });
-            this.outputChannel.appendLine('\n' + '='.repeat(80));
-            this.outputChannel.appendLine('✅ Accessibility Fixes Complete');
-            this.outputChannel.appendLine('='.repeat(80));
+                this.outputChannel.appendLine('='.repeat(80));
+            }
+            else {
+                // Provide more detailed error information
+                const statusInfo = completionDetails.status ? ` (Status: ${completionDetails.status})` : '';
+                const errorMsg = `Agent session ended without successful completion${statusInfo}. Check the Output panel for details.`;
+                this.outputChannel.appendLine(`\n⚠️ ${errorMsg}`);
+                throw new Error(errorMsg);
+            }
         }
         catch (error) {
             this.outputChannel.appendLine(`\n❌ Error during fixing: ${error}`);
@@ -176,6 +221,206 @@ class TestingWebviewProvider {
             }
             vscode.window.showErrorMessage(`Accessibility fixing failed: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+    async _exploreWorkspace(testedUrl) {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            return { srcPath: 'src', files: [], framework: 'unknown' };
+        }
+        const workspaceRoot = workspaceFolder.uri.fsPath;
+        const srcPath = path.join(workspaceRoot, 'src');
+        // Extract route from URL (e.g., /quiz, /calculator)
+        const urlMatch = testedUrl.match(/\/([^/?]+)/);
+        const routePath = urlMatch ? urlMatch[1] : '';
+        this.outputChannel.appendLine(`   Detected route: /${routePath}`);
+        // Find relevant files (framework-agnostic)
+        const relevantFiles = [];
+        let framework = 'Unknown';
+        try {
+            // Detect framework/technology first
+            const packageJsonPath = path.join(workspaceRoot, 'package.json');
+            if (fs.existsSync(packageJsonPath)) {
+                try {
+                    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+                    if (packageJson.dependencies) {
+                        // Detect various frameworks
+                        if (packageJson.dependencies['react-native'])
+                            framework = 'React Native';
+                        else if (packageJson.dependencies['@angular/core'])
+                            framework = 'Angular';
+                        else if (packageJson.dependencies['vue'])
+                            framework = 'Vue';
+                        else if (packageJson.dependencies['react'])
+                            framework = 'React';
+                        else if (packageJson.dependencies['@sveltejs/kit'])
+                            framework = 'Svelte';
+                        else if (packageJson.dependencies['next'])
+                            framework = 'Next.js';
+                        else if (packageJson.dependencies['nuxt'])
+                            framework = 'Nuxt';
+                        else if (packageJson.dependencies['express'])
+                            framework = 'Express/Node.js';
+                    }
+                }
+                catch { }
+            }
+            // Check for mobile/native frameworks
+            if (fs.existsSync(path.join(workspaceRoot, 'ios')))
+                framework = framework === 'Unknown' ? 'iOS/Swift' : framework;
+            if (fs.existsSync(path.join(workspaceRoot, 'android')))
+                framework = framework === 'Unknown' ? 'Android/Kotlin' : framework;
+            if (fs.existsSync(path.join(workspaceRoot, 'pubspec.yaml')))
+                framework = 'Flutter';
+            // Search for ANY code files (framework-agnostic)
+            if (fs.existsSync(srcPath)) {
+                // Look for main/app files (any extension)
+                const appFilePatterns = [
+                    'App', 'app', 'Main', 'main', 'Index', 'index',
+                    'Application', 'application', 'Root', 'root'
+                ];
+                const extensions = ['.jsx', '.js', '.tsx', '.ts', '.vue', '.svelte', '.html', '.swift', '.kt', '.dart'];
+                for (const pattern of appFilePatterns) {
+                    for (const ext of extensions) {
+                        const appPath = path.join(srcPath, pattern + ext);
+                        if (fs.existsSync(appPath)) {
+                            relevantFiles.push(`src/${pattern}${ext}`);
+                            this.outputChannel.appendLine(`   ✓ Found: src/${pattern}${ext}`);
+                        }
+                    }
+                }
+                // Look for route-specific files (any structure)
+                if (routePath) {
+                    const possiblePaths = [
+                        path.join(srcPath, 'features', routePath),
+                        path.join(srcPath, 'pages', routePath),
+                        path.join(srcPath, 'components', routePath),
+                        path.join(srcPath, 'views', routePath),
+                        path.join(srcPath, 'screens', routePath),
+                        path.join(srcPath, 'modules', routePath),
+                        path.join(srcPath, routePath),
+                    ];
+                    for (const dirPath of possiblePaths) {
+                        if (fs.existsSync(dirPath)) {
+                            this._findFilesRecursive(dirPath, relevantFiles, srcPath, routePath);
+                        }
+                    }
+                    // Look for files matching the route name (any extension)
+                    const componentPatterns = [
+                        routePath.toLowerCase(),
+                        routePath.toUpperCase(),
+                        routePath[0].toUpperCase() + routePath.slice(1).toLowerCase()
+                    ];
+                    this._findMatchingFiles(srcPath, componentPatterns, relevantFiles, srcPath);
+                }
+            }
+            // Search in common directories beyond src/
+            const otherDirs = ['public', 'www', 'dist', 'views', 'templates'];
+            for (const dir of otherDirs) {
+                const dirPath = path.join(workspaceRoot, dir);
+                if (fs.existsSync(dirPath) && routePath) {
+                    this._findMatchingFiles(dirPath, [routePath], relevantFiles, workspaceRoot);
+                }
+            }
+            this.outputChannel.appendLine(`   Technology: ${framework}`);
+            this.outputChannel.appendLine(`   Found ${relevantFiles.length} relevant files`);
+        }
+        catch (error) {
+            this.outputChannel.appendLine(`   ⚠️ Error exploring workspace: ${error}`);
+        }
+        return {
+            srcPath: 'src',
+            files: relevantFiles,
+            routePath: routePath,
+            framework: framework
+        };
+    }
+    _findFilesRecursive(dirPath, results, srcPath, routePath) {
+        try {
+            const items = fs.readdirSync(dirPath);
+            for (const item of items) {
+                const fullPath = path.join(dirPath, item);
+                const stat = fs.statSync(fullPath);
+                if (stat.isDirectory()) {
+                    this._findFilesRecursive(fullPath, results, srcPath, routePath);
+                }
+                else if (stat.isFile() && /\.(jsx?|tsx?|vue|svelte|html?|swift|kt|dart)$/.test(item)) {
+                    const relativePath = path.relative(path.dirname(srcPath), fullPath).replace(/\\/g, '/');
+                    if (!results.includes(relativePath)) {
+                        results.push(relativePath);
+                        this.outputChannel.appendLine(`   ✓ Found: ${relativePath}`);
+                    }
+                }
+            }
+        }
+        catch (error) {
+            // Ignore errors in recursive search
+        }
+    }
+    _findMatchingFiles(dirPath, patterns, results, srcPath) {
+        try {
+            const items = fs.readdirSync(dirPath);
+            for (const item of items) {
+                const fullPath = path.join(dirPath, item);
+                const stat = fs.statSync(fullPath);
+                if (stat.isDirectory()) {
+                    this._findMatchingFiles(fullPath, patterns, results, srcPath);
+                }
+                else if (stat.isFile() && patterns.some(p => item.toLowerCase().includes(p.toLowerCase()))) {
+                    const relativePath = path.relative(path.dirname(srcPath), fullPath).replace(/\\/g, '/');
+                    if (!results.includes(relativePath)) {
+                        results.push(relativePath);
+                        this.outputChannel.appendLine(`   ✓ Found: ${relativePath}`);
+                    }
+                }
+            }
+        }
+        catch (error) {
+            // Ignore errors
+        }
+    }
+    _createEnhancedFixPrompt(testResult, workspaceInfo) {
+        // SIMPLIFIED PROMPT - Clear and direct instructions only
+        let prompt = `Fix accessibility issues in ${workspaceInfo.framework || 'this'} project on route /${workspaceInfo.routePath || 'home'}\n\n`;
+        // List relevant files if found (no verbose explanation)
+        if (workspaceInfo.files && workspaceInfo.files.length > 0) {
+            prompt += `KEY FILES:\n`;
+            workspaceInfo.files.slice(0, 3).forEach((file) => {
+                prompt += `- ${file}\n`;
+            });
+            prompt += `\n`;
+        }
+        // List issues concisely
+        prompt += `ISSUES TO FIX:\n`;
+        const errors = testResult.issues.filter(i => i.severity === 'error');
+        const warnings = testResult.issues.filter(i => i.severity === 'warning');
+        const info = testResult.issues.filter(i => i.severity === 'info');
+        if (errors.length > 0) {
+            errors.forEach((issue, index) => {
+                prompt += `${index + 1}. [ERROR] ${issue.criterion}: ${issue.description}\n`;
+            });
+        }
+        if (warnings.length > 0) {
+            warnings.forEach((issue, index) => {
+                prompt += `${errors.length + index + 1}. [WARN] ${issue.criterion}: ${issue.description}\n`;
+            });
+        }
+        if (info.length > 0) {
+            info.forEach((issue, index) => {
+                prompt += `${errors.length + warnings.length + index + 1}. [INFO] ${issue.criterion}: ${issue.description}\n`;
+            });
+        }
+        // Simple, clear instructions
+        prompt += `\nINSTRUCTIONS:`;
+        prompt += `\n1. Read the key files listed above (2-3 files max)`;
+        prompt += `\n2. Fix the issues by adding:`;
+        prompt += `\n   - Semantic HTML landmarks (<header>, <main>, <nav>, <footer>)`;
+        prompt += `\n   - Proper heading hierarchy (h1 → h2 → h3, no skips)`;
+        prompt += `\n   - ARIA labels for interactive elements`;
+        prompt += `\n   - Form labels and fieldsets`;
+        prompt += `\n3. Use write_file or edit_file to implement changes`;
+        prompt += `\n4. Call attempt_completion when done`;
+        prompt += `\n\nSTART NOW. Read files, implement fixes, complete. Maximum 3 iterations.`;
+        return prompt;
     }
     _createFixPrompt(testResult) {
         let prompt = `Fix the following accessibility issues found by NVDA screen reader testing on ${testResult.url}:\n\n`;
@@ -240,28 +485,167 @@ class TestingWebviewProvider {
         prompt += `Please start by exploring the workspace structure to understand the project, then fix the issues systematically.`;
         return prompt;
     }
-    async _waitForAgentCompletion(sessionId) {
+    async _waitForAgentCompletion(sessionId, startTime) {
         return new Promise((resolve) => {
+            let lastKnownSession = null;
+            const MAX_ITERATIONS = 15; // Hard limit to prevent infinite loops
+            const MAX_DURATION_MS = 2 * 60 * 1000; // 2 minutes timeout
             const checkInterval = setInterval(() => {
                 const session = this.agentOrchestrator?.getSessionStatus();
-                if (!session || session.id !== sessionId) {
+                const elapsed = Date.now() - startTime;
+                // Store the last known session data
+                if (session && session.id === sessionId) {
+                    lastKnownSession = session;
+                }
+                // CRITICAL: Check for hard limits FIRST
+                const currentIterations = session?.iterations || lastKnownSession?.iterations || 0;
+                // 1. TIMEOUT - Force stop after 2 minutes
+                if (elapsed > MAX_DURATION_MS) {
                     clearInterval(checkInterval);
-                    resolve();
+                    this.outputChannel.appendLine(`⏱️ TIMEOUT: Agent exceeded 2 minutes, forcing stop`);
+                    if (this.agentOrchestrator) {
+                        this.agentOrchestrator.stopSession();
+                    }
+                    const completionResult = this._extractCompletionDetails(lastKnownSession || session);
+                    const hasChanges = completionResult.filesChanged.length > 0;
+                    resolve({
+                        success: hasChanges,
+                        summary: hasChanges ? completionResult.summary : 'Agent timed out after 2 minutes. Some changes may have been made.',
+                        filesChanged: completionResult.filesChanged,
+                        status: 'timeout'
+                    });
                     return;
                 }
+                // 2. ITERATION LIMIT - Force stop after 15 iterations
+                if (currentIterations >= MAX_ITERATIONS) {
+                    clearInterval(checkInterval);
+                    this.outputChannel.appendLine(`🛑 MAX ITERATIONS: Agent reached ${MAX_ITERATIONS} iterations, forcing stop`);
+                    if (this.agentOrchestrator) {
+                        this.agentOrchestrator.stopSession();
+                    }
+                    const completionResult = this._extractCompletionDetails(lastKnownSession || session);
+                    const hasChanges = completionResult.filesChanged.length > 0;
+                    resolve({
+                        success: hasChanges,
+                        summary: hasChanges ? completionResult.summary : `Agent stopped after ${MAX_ITERATIONS} iterations. Some changes may have been made.`,
+                        filesChanged: completionResult.filesChanged,
+                        status: 'max_iterations'
+                    });
+                    return;
+                }
+                // 3. CHECK FOR ATTEMPT_COMPLETION - Direct detection
+                if (session || lastKnownSession) {
+                    const currentSession = session || lastKnownSession;
+                    const completionResult = this._extractCompletionDetails(currentSession);
+                    // If attempt_completion was called, consider it done
+                    if (this._hasAttemptCompletion(currentSession)) {
+                        clearInterval(checkInterval);
+                        this.outputChannel.appendLine(`✅ DETECTED: attempt_completion tool called, stopping agent`);
+                        if (this.agentOrchestrator && session?.status === 'active') {
+                            this.agentOrchestrator.stopSession();
+                        }
+                        resolve({
+                            success: true,
+                            summary: completionResult.summary,
+                            filesChanged: completionResult.filesChanged,
+                            status: 'completed'
+                        });
+                        return;
+                    }
+                }
+                // 4. If session is gone or belongs to different ID
+                if (!session || session.id !== sessionId) {
+                    clearInterval(checkInterval);
+                    // Use last known session data if available
+                    if (lastKnownSession) {
+                        const completionResult = this._extractCompletionDetails(lastKnownSession);
+                        resolve({
+                            success: true,
+                            summary: completionResult.summary,
+                            filesChanged: completionResult.filesChanged,
+                            status: lastKnownSession.status
+                        });
+                    }
+                    else {
+                        resolve({ success: false, status: 'unknown' });
+                    }
+                    return;
+                }
+                // 5. Normal completion detection
                 if (session.status !== 'active') {
                     clearInterval(checkInterval);
-                    resolve();
+                    // Extract completion details from session messages
+                    const completionResult = this._extractCompletionDetails(session);
+                    // Consider it successful if status is 'completed' or if we have completion details
+                    const isSuccess = session.status === 'completed' ||
+                        (completionResult.filesChanged.length > 0 && !!completionResult.summary);
+                    resolve({
+                        success: isSuccess,
+                        summary: completionResult.summary,
+                        filesChanged: completionResult.filesChanged,
+                        status: session.status
+                    });
+                    return;
                 }
-                // Send progress update to webview
+                // Send progress update to webview with iteration count
                 if (this._view) {
                     this._view.webview.postMessage({
                         type: 'fixingProgress',
-                        message: `Agent working... (iteration ${session.iterations})`
+                        message: `Agent working... (iteration ${session.iterations}/${MAX_ITERATIONS}, ${Math.round(elapsed / 1000)}s)`
                     });
                 }
             }, 1000); // Check every second
         });
+    }
+    /**
+     * Check if attempt_completion was called in the session
+     */
+    _hasAttemptCompletion(session) {
+        if (!session || !session.messages || !Array.isArray(session.messages)) {
+            return false;
+        }
+        for (const message of session.messages) {
+            if (message.toolCalls && Array.isArray(message.toolCalls)) {
+                for (const toolCall of message.toolCalls) {
+                    if (toolCall.name === 'attempt_completion') {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    _extractCompletionDetails(session) {
+        // Look for attempt_completion tool calls in the session messages
+        const filesChanged = new Set();
+        let completionSummary = 'Agent completed accessibility fixes.';
+        if (session.messages && Array.isArray(session.messages)) {
+            for (const message of session.messages) {
+                // Check for tool calls in assistant messages
+                if (message.toolCalls && Array.isArray(message.toolCalls)) {
+                    for (const toolCall of message.toolCalls) {
+                        // Track file changes from write_file and edit_file
+                        if (toolCall.name === 'write_file' || toolCall.name === 'edit_file') {
+                            const filePath = toolCall.input?.file_path || toolCall.input?.path;
+                            if (filePath) {
+                                filesChanged.add(filePath);
+                            }
+                        }
+                        // Get completion summary from attempt_completion
+                        if (toolCall.name === 'attempt_completion') {
+                            const result = toolCall.input?.result;
+                            if (result && typeof result === 'string') {
+                                completionSummary = result;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return {
+            summary: completionSummary,
+            filesChanged: Array.from(filesChanged)
+        };
     }
     _getHtmlForWebview(webview) {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'webviews', 'testing.js'));

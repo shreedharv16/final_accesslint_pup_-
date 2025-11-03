@@ -287,15 +287,93 @@
             case 'fixingComplete':
                 fixProgress.classList.add('hidden');
                 fixSummary.classList.remove('hidden');
-                fixSummary.innerHTML = `
+                
+                // Build detailed summary HTML
+                let summaryHTML = `
                     <div class="fix-success">
                         <div class="fix-icon">✅</div>
-                        <h3>Fixes Applied Successfully</h3>
-                        <p>${escapeHtml(message.summary.message)}</p>
-                        <p class="fix-note">Review the changes in the diff viewer and check the Output panel for details.</p>
+                        <h3>Accessibility Fixes Applied Successfully!</h3>
+                        
+                        <div class="fix-stats">
+                            <div class="fix-stat">
+                                <span class="stat-number">${message.summary.issuesFixed || 0}</span>
+                                <span class="stat-label">Issues Addressed</span>
+                            </div>
+                            <div class="fix-stat">
+                                <span class="stat-number">${message.summary.totalFiles || 0}</span>
+                                <span class="stat-label">Files Modified</span>
+                            </div>
+                        </div>
+                `;
+
+                // Add files changed list if available
+                if (message.summary.filesChanged && message.summary.filesChanged.length > 0) {
+                    summaryHTML += `
+                        <div class="files-changed-section">
+                            <h4>📁 Files Modified:</h4>
+                            <ul class="files-list">
+                                ${message.summary.filesChanged.map(file => `
+                                    <li class="file-item">
+                                        <span class="file-icon">📝</span>
+                                        <code>${escapeHtml(file)}</code>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                // Add detailed summary if available
+                if (message.summary.message) {
+                    // Parse the summary into sections for better readability
+                    const summaryText = message.summary.message;
+                    const sections = summaryText.split(/\n\n+/);
+                    
+                    summaryHTML += `
+                        <div class="fix-details">
+                            <h4>🔧 What Was Fixed:</h4>
+                            <div class="fix-details-content">
+                                ${sections.map(section => {
+                                    // Check if section is a list
+                                    if (section.includes('\n-') || section.includes('\n•')) {
+                                        const lines = section.split('\n').filter(l => l.trim());
+                                        const title = lines[0];
+                                        const items = lines.slice(1).filter(l => l.trim().startsWith('-') || l.trim().startsWith('•'));
+                                        
+                                        return `
+                                            <div class="fix-section">
+                                                <strong>${escapeHtml(title)}</strong>
+                                                <ul class="fix-list">
+                                                    ${items.map(item => `<li>${escapeHtml(item.replace(/^[-•]\s*/, ''))}</li>`).join('')}
+                                                </ul>
+                                            </div>
+                                        `;
+                                    } else {
+                                        return `<p class="fix-paragraph">${escapeHtml(section)}</p>`;
+                                    }
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                summaryHTML += `
+                        <div class="fix-actions">
+                            <p class="fix-note">
+                                <strong>Next Steps:</strong><br>
+                                • Review changes in the Diff Viewer<br>
+                                • Accept or reject each change<br>
+                                • Re-run the test to verify fixes
+                            </p>
+                        </div>
                     </div>
                 `;
+                
+                fixSummary.innerHTML = summaryHTML;
                 fixIssuesBtn.disabled = false;
+                
+                // Scroll to show the summary
+                fixSummary.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 break;
 
             case 'fixingError':
