@@ -1,0 +1,18 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.lsToolDefinition = void 0;
+exports.lsToolDefinition = {
+    name: "LS",
+    descriptionForAgent: "Lists files and directories in a given path. The path parameter must be an absolute path, not a relative path. You should generally prefer the Glob and Grep tools, if you know which directories to search.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            path: {
+                type: "string",
+                description: "The path of the directory to list contents for",
+            },
+        },
+        required: ["path"],
+    },
+};
+//# sourceMappingURL=lsTool.js.map

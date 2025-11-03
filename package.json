@@ -1,0 +1,229 @@
+{
+  "name": "accesslint",
+  "displayName": "AccessLint - Accessibility AI Code Agent",
+  "description": "An accessibility-first AI code agent that scans repositories and provides intelligent accessibility improvements",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other",
+    "Linters"
+  ],
+  "keywords": [
+    "accessibility",
+    "a11y",
+    "WCAG",
+    "AI",
+    "code analysis"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "accesslint.openChat",
+        "title": "Open Chat",
+        "category": "AccessLint",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "accesslint.configureApiKey",
+        "title": "Configure API Keys",
+        "category": "AccessLint",
+        "icon": "$(key)"
+      },
+      {
+        "command": "accesslint.configureGeminiApiKey",
+        "title": "Configure Gemini API Key",
+        "category": "AccessLint",
+        "icon": "$(key)"
+      },
+      {
+        "command": "accesslint.configureAnthropicApiKey",
+        "title": "Configure Anthropic API Key",
+        "category": "AccessLint",
+        "icon": "$(key)"
+      },
+      {
+        "command": "accesslint.configureOpenAIApiKey",
+        "title": "Configure OpenAI API Key",
+        "category": "AccessLint",
+        "icon": "$(key)"
+      },
+      {
+        "command": "accesslint.showPanel",
+        "title": "Show AccessLint Panel",
+        "category": "AccessLint",
+        "icon": "$(accessibility)"
+      },
+      {
+        "command": "accesslint.startLLMAgent",
+        "title": "Start LLM Agent",
+        "category": "AccessLint",
+        "icon": "$(robot)"
+      },
+      {
+        "command": "accesslint.stopLLMAgent",
+        "title": "Stop LLM Agent",
+        "category": "AccessLint",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "accesslint.showLLMAgentStatus",
+        "title": "Show LLM Agent Status",
+        "category": "AccessLint",
+        "icon": "$(info)"
+      },
+      {
+        "command": "accesslint.showTokenStats",
+        "title": "Show Token Usage Statistics",
+        "category": "AccessLint",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "accesslint.newChatSession",
+        "title": "Start New Chat Session",
+        "category": "AccessLint",
+        "icon": "$(add)"
+      },
+      {
+        "command": "accesslint.configureContextTruncation",
+        "title": "Configure Context Truncation Strategy",
+        "category": "AccessLint",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "accesslint.openTesting",
+        "title": "Open Accessibility Testing",
+        "category": "AccessLint",
+        "icon": "$(beaker)"
+      }
+    ],
+    "views": {
+      "accesslint": [
+        {
+          "id": "accesslint.chatView",
+          "type": "webview",
+          "name": "AI Chat",
+          "when": "true"
+        },
+        {
+          "id": "accesslint.testingView",
+          "type": "webview",
+          "name": "Accessibility Testing",
+          "when": "true"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "accesslint",
+          "title": "AccessLint",
+          "icon": "./icons/accessibility-white.svg"
+        }
+      ]
+    },
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "accesslint.startLLMAgent",
+          "when": "resourceExtname =~ /\\.(js|jsx|ts|tsx|html|css|scss|sass|vue|svelte)$/",
+          "group": "accesslint@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "accesslint.startLLMAgent",
+          "when": "resourceExtname =~ /\\.(js|jsx|ts|tsx|html|css|scss|sass|vue|svelte)$/",
+          "group": "accesslint@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AccessLint",
+      "properties": {
+        "accesslint.anthropicModel": {
+          "type": "string",
+          "default": "claude-3-7-sonnet-20250219",
+          "enum": [
+            "claude-3-7-sonnet-20250219",
+            "claude-sonnet-4-20250514",
+            "claude-3-opus-20240229",
+            "claude-3-sonnet-20240229",
+            "claude-3-haiku-20240307"
+          ],
+          "description": "Anthropic Claude model to use"
+        },
+        "accesslint.anthropicBaseUrl": {
+          "type": "string",
+          "default": "https://api.anthropic.com",
+          "description": "Base URL for Anthropic API"
+        },
+        "accesslint.defaultAiProvider": {
+          "type": "string",
+          "default": "gemini",
+          "enum": [
+            "gemini",
+            "anthropic",
+            "openai"
+          ],
+          "description": "Default AI provider to use when multiple are configured"
+        },
+        "accesslint.openaiModel": {
+          "type": "string",
+          "default": "gpt-4",
+          "enum": [
+            "gpt-4",
+            "gpt-4-turbo-preview",
+            "gpt-4-1106-preview",
+            "gpt-3.5-turbo",
+            "gpt-3.5-turbo-16k"
+          ],
+          "description": "OpenAI GPT model to use"
+        },
+        "accesslint.toolMode": {
+          "type": "string",
+          "default": "quick",
+          "enum": [
+            "quick",
+            "agent"
+          ],
+          "description": "Default tool execution mode (quick for simple operations, agent for complex workflows)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.2.0",
+    "@vscode/vsce": "^2.15.0",
+    "eslint": "^8.28.0",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.3",
+    "@google/generative-ai": "^0.21.0",
+    "@guidepup/guidepup": "^0.24.0",
+    "@types/node-fetch": "^2.6.13",
+    "highlight.js": "^11.11.1",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.104.0",
+    "playwright": "^1.56.0"
+  }
+}

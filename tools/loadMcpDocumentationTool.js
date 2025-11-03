@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.loadMcpDocumentationToolDefinition = exports.loadMcpDocumentationToolName = void 0;
+exports.loadMcpDocumentationToolName = "LoadMcpDocumentation";
+const descriptionForAgent = (useMCPToolName, accessMcpResourceToolName) => `Load documentation about creating MCP servers. This tool should be used when the user requests to create or install an MCP server (the user may ask you something along the lines of "add a tool" that does some function, in other words to create an MCP server that provides tools and resources that may connect to external APIs for example. You have the ability to create an MCP server and add it to a configuration file that will then expose the tools and resources for you to use with \`${useMCPToolName}\` and \`${accessMcpResourceToolName}\`). The documentation provides detailed information about the MCP server creation process, including setup instructions, best practices, and examples.`;
+const loadMcpDocumentationToolDefinition = (useMCPToolName, accessMcpResourceToolName) => ({
+    name: exports.loadMcpDocumentationToolName,
+    descriptionForAgent: descriptionForAgent(useMCPToolName, accessMcpResourceToolName),
+    inputSchema: {
+        type: "object",
+        properties: {},
+        required: [],
+    },
+});
+exports.loadMcpDocumentationToolDefinition = loadMcpDocumentationToolDefinition;
+//# sourceMappingURL=loadMcpDocumentationTool.js.map
