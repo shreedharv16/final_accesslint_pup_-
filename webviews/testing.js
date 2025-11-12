@@ -288,83 +288,51 @@
                 fixProgress.classList.add('hidden');
                 fixSummary.classList.remove('hidden');
                 
-                // Build detailed summary HTML
-                let summaryHTML = `
-                    <div class="fix-success">
-                        <div class="fix-icon">✅</div>
-                        <h3>Accessibility Fixes Applied Successfully!</h3>
-                        
-                        <div class="fix-stats">
-                            <div class="fix-stat">
-                                <span class="stat-number">${message.summary.issuesFixed || 0}</span>
-                                <span class="stat-label">Issues Addressed</span>
-                            </div>
-                            <div class="fix-stat">
-                                <span class="stat-number">${message.summary.totalFiles || 0}</span>
-                                <span class="stat-label">Files Modified</span>
-                            </div>
-                        </div>
-                `;
-
-                // Add files changed list if available
-                if (message.summary.filesChanged && message.summary.filesChanged.length > 0) {
-                    summaryHTML += `
-                        <div class="files-changed-section">
-                            <h4>📁 Files Modified:</h4>
-                            <ul class="files-list">
-                                ${message.summary.filesChanged.map(file => `
-                                    <li class="file-item">
-                                        <span class="file-icon">📝</span>
-                                        <code>${escapeHtml(file)}</code>
-                                    </li>
-                                `).join('')}
-                            </ul>
-                        </div>
-                    `;
-                }
-
-                // Add detailed summary if available
+                // COMPACT CARD LAYOUT - Horizontal and neat
+                const filesChanged = message.summary.filesChanged || [];
+                const fileList = filesChanged.length > 0 
+                    ? filesChanged.map(f => `<code class="file-badge">${escapeHtml(f.split('/').pop())}</code>`).join(' ')
+                    : '<span class="no-files">No files modified</span>';
+                
+                // Extract key summary points (first 2 sentences max)
+                let summaryShort = 'Accessibility improvements applied.';
                 if (message.summary.message) {
-                    // Parse the summary into sections for better readability
-                    const summaryText = message.summary.message;
-                    const sections = summaryText.split(/\n\n+/);
-                    
-                    summaryHTML += `
-                        <div class="fix-details">
-                            <h4>🔧 What Was Fixed:</h4>
-                            <div class="fix-details-content">
-                                ${sections.map(section => {
-                                    // Check if section is a list
-                                    if (section.includes('\n-') || section.includes('\n•')) {
-                                        const lines = section.split('\n').filter(l => l.trim());
-                                        const title = lines[0];
-                                        const items = lines.slice(1).filter(l => l.trim().startsWith('-') || l.trim().startsWith('•'));
-                                        
-                                        return `
-                                            <div class="fix-section">
-                                                <strong>${escapeHtml(title)}</strong>
-                                                <ul class="fix-list">
-                                                    ${items.map(item => `<li>${escapeHtml(item.replace(/^[-•]\s*/, ''))}</li>`).join('')}
-                                                </ul>
-                                            </div>
-                                        `;
-                                    } else {
-                                        return `<p class="fix-paragraph">${escapeHtml(section)}</p>`;
-                                    }
-                                }).join('')}
-                            </div>
-                        </div>
-                    `;
+                    const firstSentences = message.summary.message.split(/[.!?]\s+/).slice(0, 2).join('. ');
+                    summaryShort = firstSentences.length > 150 
+                        ? firstSentences.substring(0, 150) + '...' 
+                        : firstSentences;
                 }
-
-                summaryHTML += `
-                        <div class="fix-actions">
-                            <p class="fix-note">
-                                <strong>Next Steps:</strong><br>
-                                • Review changes in the Diff Viewer<br>
-                                • Accept or reject each change<br>
-                                • Re-run the test to verify fixes
-                            </p>
+                
+                let summaryHTML = `
+                    <div class="fix-success-card">
+                        <div class="fix-card-header">
+                            <span class="fix-icon-inline">✅</span>
+                            <h3>Fixes Applied Successfully</h3>
+                        </div>
+                        
+                        <div class="fix-card-body">
+                            <div class="fix-stats-row">
+                                <div class="fix-stat-compact">
+                                    <span class="stat-number-small">${message.summary.issuesFixed || 0}</span>
+                                    <span class="stat-label-small">Issues Fixed</span>
+                                </div>
+                                <div class="fix-stat-compact">
+                                    <span class="stat-number-small">${message.summary.totalFiles || 0}</span>
+                                    <span class="stat-label-small">Files Changed</span>
+                                </div>
+                            </div>
+                            
+                            <div class="fix-files-inline">
+                                <strong>Modified:</strong> ${fileList}
+                            </div>
+                            
+                            <div class="fix-summary-text">
+                                ${escapeHtml(summaryShort)}
+                            </div>
+                            
+                            <div class="fix-actions-compact">
+                                <span class="action-hint">💡 Review changes in Diff Viewer → Accept/Reject → Re-test</span>
+                            </div>
                         </div>
                     </div>
                 `;

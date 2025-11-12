@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { chromium, Browser, Page } from 'playwright';
 import { nvda } from '@guidepup/guidepup';
+import { AiProviderManager } from './aiProviderManager';
+import { execSync } from 'child_process';
 
 export interface NVDAInteraction {
     action: string;
@@ -17,6 +19,8 @@ export interface AccessibilityIssue {
     expectedAnnouncement?: string;
     element?: string;
     location?: string;
+    source?: 'basic' | 'ai'; // Track whether issue came from basic or AI validation
+    recommendation?: string; // AI can provide fix recommendations
 }
 
 export interface TestResult {
@@ -38,9 +42,12 @@ export class AccessibilityTester {
     private page: Page | null = null;
     private outputChannel: vscode.OutputChannel;
     private nvdaRunning: boolean = false;
+    private aiProviderManager: AiProviderManager | null = null;
+    private enableAIValidation: boolean = true; // Toggle for AI validation
 
-    constructor(outputChannel: vscode.OutputChannel) {
+    constructor(outputChannel: vscode.OutputChannel, aiProviderManager?: AiProviderManager) {
         this.outputChannel = outputChannel;
+        this.aiProviderManager = aiProviderManager || null;
     }
 
     async initialize(): Promise<void> {
@@ -52,20 +59,89 @@ export class AccessibilityTester {
                 throw new Error('NVDA is only available on Windows. Current platform: ' + process.platform);
             }
 
-            // Start NVDA
+            // Diagnostics
+            this.outputChannel.appendLine(`   Platform: ${process.platform}`);
+            this.outputChannel.appendLine(`   Node version: ${process.version}`);
+            
+            // Check if NVDA is already running
+            try {
+                const result = execSync('tasklist /FI "IMAGENAME eq nvda.exe"', { encoding: 'utf-8' });
+                if (result.includes('nvda.exe')) {
+                    this.outputChannel.appendLine('   ⚠️ WARNING: NVDA is already running!');
+                    this.outputChannel.appendLine('   ⚠️ This may cause issues. Consider closing NVDA first.');
+                } else {
+                    this.outputChannel.appendLine('   ✓ NVDA not currently running');
+                }
+            } catch (e) {
+                this.outputChannel.appendLine('   Could not check if NVDA is running');
+            }
+
+            // Start NVDA with timeout
             this.outputChannel.appendLine('📢 Starting NVDA...');
-            await nvda.start();
-            this.nvdaRunning = true;
-            this.outputChannel.appendLine('✅ NVDA started successfully');
+            this.outputChannel.appendLine('   This may take 10-15 seconds...');
+            try {
+                // Add timeout wrapper (30 seconds max)
+                const nvdaStartPromise = nvda.start();
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('NVDA start timeout after 30 seconds')), 30000);
+                });
+                
+                await Promise.race([nvdaStartPromise, timeoutPromise]);
+                this.nvdaRunning = true;
+                this.outputChannel.appendLine('✅ NVDA started successfully');
+            } catch (nvdaError: any) {
+                this.outputChannel.appendLine(`❌ Failed to start NVDA: ${nvdaError}`);
+                this.outputChannel.appendLine('');
+                this.outputChannel.appendLine('🔧 TROUBLESHOOTING:');
+                this.outputChannel.appendLine('   1. Have you run: npx @guidepup/setup');
+                this.outputChannel.appendLine('   2. Is NVDA already running? (Close it and try again)');
+                this.outputChannel.appendLine('   3. Is this Windows 10/11? (NVDA only works on Windows)');
+                this.outputChannel.appendLine('   4. Check if NVDA.exe is in your PATH');
+                this.outputChannel.appendLine('');
+                throw nvdaError;
+            }
 
             // Initialize browser
-            this.outputChannel.appendLine('🌐 Launching browser...');
-            this.browser = await chromium.launch({ 
-                headless: false,
-                timeout: 60000 
-            });
-            this.page = await this.browser.newPage();
-            this.outputChannel.appendLine('✅ Browser launched successfully');
+            this.outputChannel.appendLine('🌐 Launching Chromium browser...');
+            this.outputChannel.appendLine('   This may take a moment on first launch...');
+            
+            try {
+                this.browser = await chromium.launch({ 
+                    headless: false,
+                    timeout: 60000,
+                    args: ['--no-sandbox', '--disable-setuid-sandbox'] // Helps with permissions
+                });
+                
+                if (!this.browser) {
+                    throw new Error('Browser failed to launch (returned null)');
+                }
+                
+                this.page = await this.browser.newPage();
+                
+                if (!this.page) {
+                    throw new Error('Failed to create browser page');
+                }
+                
+                this.outputChannel.appendLine('✅ Browser launched successfully');
+                this.outputChannel.appendLine(`   Browser visible: You should see a Chromium window`);
+            } catch (browserError: any) {
+                this.outputChannel.appendLine(`❌ Failed to launch browser: ${browserError}`);
+                
+                // Check if it's a Playwright installation issue
+                if (browserError.message && browserError.message.includes('Executable doesn\'t exist')) {
+                    this.outputChannel.appendLine('');
+                    this.outputChannel.appendLine('❌ PLAYWRIGHT BROWSERS NOT INSTALLED!');
+                    this.outputChannel.appendLine('');
+                    this.outputChannel.appendLine('🔧 To fix, run this command in your terminal:');
+                    this.outputChannel.appendLine('   npx playwright install chromium');
+                    this.outputChannel.appendLine('');
+                    this.outputChannel.appendLine('   OR install all browsers:');
+                    this.outputChannel.appendLine('   npx playwright install');
+                    this.outputChannel.appendLine('');
+                }
+                
+                throw browserError;
+            }
 
         } catch (error) {
             this.outputChannel.appendLine(`❌ Failed to initialize: ${error}`);
@@ -116,47 +192,65 @@ export class AccessibilityTester {
 
             progress('📢 Starting NVDA navigation and testing...');
 
+            // PHASE 1: Basic NVDA Testing (Hardcoded Rules)
+            progress('📋 Phase 1: Running basic NVDA validation...');
+            
             // Test 1: Navigate through headings
             progress('Testing headings navigation...');
             const headingResults = await this.testHeadings();
             interactions.push(...headingResults.interactions);
-            issues.push(...headingResults.issues);
+            issues.push(...headingResults.issues.map(i => ({ ...i, source: 'basic' as const })));
 
             // Test 2: Navigate through links
             progress('Testing links navigation...');
             const linkResults = await this.testLinks();
             interactions.push(...linkResults.interactions);
-            issues.push(...linkResults.issues);
+            issues.push(...linkResults.issues.map(i => ({ ...i, source: 'basic' as const })));
 
             // Test 3: Navigate through form elements
             progress('Testing form elements...');
             const formResults = await this.testFormElements();
             interactions.push(...formResults.interactions);
-            issues.push(...formResults.issues);
+            issues.push(...formResults.issues.map(i => ({ ...i, source: 'basic' as const })));
 
             // Test 4: Navigate through landmarks
             progress('Testing landmarks...');
             const landmarkResults = await this.testLandmarks();
             interactions.push(...landmarkResults.interactions);
-            issues.push(...landmarkResults.issues);
+            issues.push(...landmarkResults.issues.map(i => ({ ...i, source: 'basic' as const })));
 
             // Test 5: Test sequential navigation
             progress('Testing sequential navigation...');
             const sequentialResults = await this.testSequentialNavigation();
             interactions.push(...sequentialResults.interactions);
-            issues.push(...sequentialResults.issues);
+            issues.push(...sequentialResults.issues.map(i => ({ ...i, source: 'basic' as const })));
 
             // Test 6: Test interactive elements
             progress('Testing interactive elements...');
             const interactiveResults = await this.testInteractiveElements();
             interactions.push(...interactiveResults.interactions);
-            issues.push(...interactiveResults.issues);
+            issues.push(...interactiveResults.issues.map(i => ({ ...i, source: 'basic' as const })));
 
             // Capture full NVDA log
             const spokenLog = await nvda.spokenPhraseLog();
             nvdaLog.push(...spokenLog);
 
-            progress(`✅ NVDA testing completed`);
+            progress(`✅ Basic NVDA testing completed (${issues.length} issues found)`);
+
+            // PHASE 2: AI Comprehensive Validation (if enabled)
+            if (this.enableAIValidation && this.aiProviderManager) {
+                progress('🤖 Phase 2: Running AI comprehensive validation...');
+                try {
+                    const aiIssues = await this.aiValidation(url, interactions, issues);
+                    issues.push(...aiIssues);
+                    progress(`✅ AI validation completed (${aiIssues.length} additional issues found)`);
+                } catch (error) {
+                    progress(`⚠️ AI validation failed: ${error}`);
+                    this.outputChannel.appendLine(`AI validation error: ${error}`);
+                }
+            } else if (!this.aiProviderManager) {
+                progress('ℹ️ AI validation skipped (no AI provider configured)');
+            }
 
             const summary = {
                 errors: issues.filter(i => i.severity === 'error').length,
@@ -686,6 +780,208 @@ export class AccessibilityTester {
             return '';
         }
     }
+
+    // ==================== AI VALIDATION METHODS ====================
+
+    /**
+     * AI-powered comprehensive WCAG validation
+     */
+    private async aiValidation(
+        url: string,
+        interactions: NVDAInteraction[],
+        basicIssues: AccessibilityIssue[]
+    ): Promise<AccessibilityIssue[]> {
+        if (!this.aiProviderManager) {
+            return [];
+        }
+
+        try {
+            // Build comprehensive prompt
+            const prompt = this.buildAIValidationPrompt(url, interactions, basicIssues);
+
+            // Call AI provider
+            const response = await this.callAI(prompt);
+
+            // Parse response into issues
+            return this.parseAIIssues(response);
+        } catch (error) {
+            this.outputChannel.appendLine(`❌ AI validation error: ${error}`);
+            return [];
+        }
+    }
+
+    /**
+     * Build comprehensive WCAG validation prompt
+     */
+    private buildAIValidationPrompt(
+        url: string,
+        interactions: NVDAInteraction[],
+        basicIssues: AccessibilityIssue[]
+    ): string {
+        // Group interactions by type
+        const headings = interactions.filter(i => i.action.toLowerCase().includes('heading'));
+        const links = interactions.filter(i => i.action.toLowerCase().includes('link'));
+        const forms = interactions.filter(i => i.action.toLowerCase().includes('form'));
+        const landmarks = interactions.filter(i => i.action.toLowerCase().includes('landmark'));
+        const buttons = interactions.filter(i => i.action.toLowerCase().includes('button'));
+
+        return `You are an accessibility expert. Analyze this NVDA screen reader session for WCAG 2.1 Level AA compliance.
+
+# URL Tested
+${url}
+
+# NVDA Interactions Summary
+- Total interactions: ${interactions.length}
+- Headings found: ${headings.length}
+- Links found: ${links.length}
+- Form fields found: ${forms.length}
+- Landmarks found: ${landmarks.length}
+- Buttons found: ${buttons.length}
+
+# Detailed NVDA Announcements
+
+## Headings (${headings.length})
+${headings.length > 0 ? headings.slice(0, 20).map((i, idx) => 
+    `${idx + 1}. NVDA: "${i.announcement}" | Element: "${i.element || 'N/A'}"`
+).join('\n') : 'No headings found'}
+
+## Links (${links.length})
+${links.length > 0 ? links.slice(0, 15).map((i, idx) => 
+    `${idx + 1}. NVDA: "${i.announcement}" | Element: "${i.element || 'N/A'}"`
+).join('\n') : 'No links found'}
+
+## Form Fields (${forms.length})
+${forms.length > 0 ? forms.slice(0, 15).map((i, idx) => 
+    `${idx + 1}. NVDA: "${i.announcement}" | Element: "${i.element || 'N/A'}"`
+).join('\n') : 'No form fields found'}
+
+## Landmarks (${landmarks.length})
+${landmarks.length > 0 ? landmarks.map((i, idx) => 
+    `${idx + 1}. NVDA: "${i.announcement}" | Element: "${i.element || 'N/A'}"`
+).join('\n') : 'No landmarks found'}
+
+## Buttons (${buttons.length})
+${buttons.length > 0 ? buttons.slice(0, 15).map((i, idx) => 
+    `${idx + 1}. NVDA: "${i.announcement}" | Element: "${i.element || 'N/A'}"`
+).join('\n') : 'No buttons found'}
+
+# Basic Issues Found (${basicIssues.length})
+${basicIssues.length > 0 ? basicIssues.map((i, idx) => 
+    `${idx + 1}. [${i.severity.toUpperCase()}] ${i.criterion}: ${i.description}`
+).join('\n') : 'No basic issues found'}
+
+# Your Task
+Perform comprehensive WCAG 2.1 Level AA analysis. Find issues that basic validation might miss:
+
+## WCAG Principles to Check:
+1. **Perceivable**
+   - 1.1.1 Non-text Content (alt text quality, decorative images)
+   - 1.3.1 Info and Relationships (semantic structure, ARIA usage)
+   - 1.3.2 Meaningful Sequence (reading order, focus order)
+   - 1.4.3 Contrast (Minimum) - note if cannot verify from NVDA data
+   - 1.4.11 Non-text Contrast
+
+2. **Operable**
+   - 2.1.1 Keyboard (keyboard accessibility)
+   - 2.4.1 Bypass Blocks (skip links)
+   - 2.4.3 Focus Order
+   - 2.4.4 Link Purpose (Context)
+   - 2.4.6 Headings and Labels (quality)
+   - 2.4.7 Focus Visible
+
+3. **Understandable**
+   - 3.1.1 Language of Page
+   - 3.2.3 Consistent Navigation
+   - 3.2.4 Consistent Identification
+   - 3.3.2 Labels or Instructions
+
+4. **Robust**
+   - 4.1.2 Name, Role, Value (proper ARIA)
+   - 4.1.3 Status Messages
+
+## Important:
+- Focus on issues NOT already found by basic validation
+- Use NVDA announcements as evidence
+- If you cannot determine something from NVDA data alone, note it as "info" severity
+- Provide actionable recommendations
+
+# Output Format (JSON only, no markdown)
+{
+  "issues": [
+    {
+      "criterion": "WCAG criterion (e.g., 1.3.1 Info and Relationships)",
+      "severity": "error|warning|info",
+      "description": "Clear description of the issue",
+      "recommendation": "How to fix it with code examples if helpful",
+      "evidence": "NVDA announcement or element that proves the issue"
+    }
+  ]
+}
+
+Return ONLY valid JSON, no markdown, no code blocks, just the raw JSON object.`;
+    }
+
+    /**
+     * Call AI provider with prompt
+     */
+    private async callAI(prompt: string): Promise<string> {
+        if (!this.aiProviderManager) {
+            throw new Error('AI provider not configured');
+        }
+
+        try {
+            // Build complete prompt with system message
+            const fullPrompt = `You are an accessibility expert specializing in WCAG 2.1 Level AA compliance analysis. You analyze NVDA screen reader output and provide detailed accessibility insights.
+
+${prompt}`;
+
+            // Call the AI provider using sendMessage
+            const response = await this.aiProviderManager.sendMessage(fullPrompt);
+
+            return response.text;
+        } catch (error) {
+            this.outputChannel.appendLine(`❌ AI call failed: ${error}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Parse AI response into AccessibilityIssue array
+     */
+    private parseAIIssues(aiResponse: string): AccessibilityIssue[] {
+        try {
+            // Clean response (remove markdown code blocks if present)
+            let cleaned = aiResponse.trim();
+            if (cleaned.startsWith('```json')) {
+                cleaned = cleaned.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            } else if (cleaned.startsWith('```')) {
+                cleaned = cleaned.replace(/```\n?/g, '').trim();
+            }
+
+            const parsed = JSON.parse(cleaned);
+
+            if (!parsed.issues || !Array.isArray(parsed.issues)) {
+                this.outputChannel.appendLine('⚠️ AI response missing issues array');
+                return [];
+            }
+
+            // Map to AccessibilityIssue format
+            return parsed.issues.map((issue: any) => ({
+                criterion: issue.criterion || 'Unknown',
+                severity: (issue.severity as 'error' | 'warning' | 'info') || 'info',
+                description: issue.description || 'No description provided',
+                recommendation: issue.recommendation,
+                nvdaAnnouncement: issue.evidence,
+                source: 'ai' as const
+            }));
+        } catch (error) {
+            this.outputChannel.appendLine(`❌ Failed to parse AI response: ${error}`);
+            this.outputChannel.appendLine(`Response was: ${aiResponse.substring(0, 500)}...`);
+            return [];
+        }
+    }
+
+    // ==================== UTILITY METHODS ====================
 
     private async stopNVDA(): Promise<void> {
         try {

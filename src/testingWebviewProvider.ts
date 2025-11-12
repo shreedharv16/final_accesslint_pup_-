@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { AccessibilityTester, TestResult, NVDAInteraction } from './accessibilityTester';
-import { AgentLLMOrchestrator } from './agentLLMOrchestrator';
+import { TestingAgentOrchestrator } from './testingAgentOrchestrator';
 
 export class TestingWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'accesslint.testingView';
@@ -10,18 +10,18 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private outputChannel: vscode.OutputChannel;
     private tester: AccessibilityTester | null = null;
-    private agentOrchestrator: AgentLLMOrchestrator | null = null;
+    private agentOrchestrator: TestingAgentOrchestrator | null = null;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
         protected readonly context: vscode.ExtensionContext,
-        agentOrchestrator?: AgentLLMOrchestrator
+        agentOrchestrator?: TestingAgentOrchestrator
     ) {
         this.outputChannel = vscode.window.createOutputChannel('AccessLint Testing');
         this.agentOrchestrator = agentOrchestrator || null;
     }
 
-    public setAgentOrchestrator(orchestrator: AgentLLMOrchestrator): void {
+    public setAgentOrchestrator(orchestrator: TestingAgentOrchestrator): void {
         this.agentOrchestrator = orchestrator;
     }
 
@@ -81,8 +81,9 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
             this.outputChannel.appendLine(`🧪 Starting Accessibility Test for: ${url}`);
             this.outputChannel.appendLine('='.repeat(80));
 
-            // Initialize tester
-            this.tester = new AccessibilityTester(this.outputChannel);
+            // Initialize tester with AI provider for comprehensive validation
+            const aiProvider = this.agentOrchestrator ? (this.agentOrchestrator as any).aiProviderManager : null;
+            this.tester = new AccessibilityTester(this.outputChannel, aiProvider);
             await this.tester.initialize();
 
             // Run the test with progress updates
@@ -262,11 +263,20 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
         const workspaceRoot = workspaceFolder.uri.fsPath;
         const srcPath = path.join(workspaceRoot, 'src');
         
-        // Extract route from URL (e.g., /quiz, /calculator)
-        const urlMatch = testedUrl.match(/\/([^/?]+)/);
-        const routePath = urlMatch ? urlMatch[1] : '';
+        // Extract route from URL properly (e.g., /quiz, /calculator from http://localhost:5173/quiz)
+        let routePath = '';
+        try {
+            const url = new URL(testedUrl);
+            // Get the first path segment (e.g., 'quiz' from '/quiz' or '/quiz/something')
+            const pathSegments = url.pathname.split('/').filter(p => p.trim() !== '');
+            routePath = pathSegments[0] || '';
+        } catch {
+            // Fallback to simple parsing if URL constructor fails
+            const pathMatch = testedUrl.match(/\/([a-zA-Z0-9_-]+)(?:[/?#]|$)/);
+            routePath = pathMatch ? pathMatch[1] : '';
+        }
         
-        this.outputChannel.appendLine(`   Detected route: /${routePath}`);
+        this.outputChannel.appendLine(`   Detected route: /${routePath || 'home'}`);
 
         // Find relevant files (framework-agnostic)
         const relevantFiles: string[] = [];
@@ -414,51 +424,50 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _createEnhancedFixPrompt(testResult: TestResult, workspaceInfo: any): string {
-        // SIMPLIFIED PROMPT - Clear and direct instructions only
-        let prompt = `Fix accessibility issues in ${workspaceInfo.framework || 'this'} project on route /${workspaceInfo.routePath || 'home'}\n\n`;
+        // ULTRA-DIRECTIVE PROMPT - Forces immediate implementation, no exploration loops
+        const route = workspaceInfo.routePath || 'home';
+        const framework = workspaceInfo.framework || 'this';
         
-        // List relevant files if found (no verbose explanation)
+        let prompt = `🎯 URGENT FIX REQUIRED for /${route} route in ${framework} project.\n\n`;
+        
+        // List files compactly
         if (workspaceInfo.files && workspaceInfo.files.length > 0) {
-            prompt += `KEY FILES:\n`;
-            workspaceInfo.files.slice(0, 3).forEach((file: string) => {
-                prompt += `- ${file}\n`;
-            });
-            prompt += `\n`;
+            const fileList = workspaceInfo.files.slice(0, 4).join(', ');
+            prompt += `📁 TARGET FILES: ${fileList}\n\n`;
         }
 
-        // List issues concisely
-        prompt += `ISSUES TO FIX:\n`;
+        // List issues compactly
         const errors = testResult.issues.filter(i => i.severity === 'error');
         const warnings = testResult.issues.filter(i => i.severity === 'warning');
         const info = testResult.issues.filter(i => i.severity === 'info');
+        
+        const allIssues = [...errors, ...warnings, ...info];
+        prompt += `🐛 ACCESSIBILITY ISSUES (${allIssues.length} total):\n`;
+        allIssues.forEach((issue, i) => {
+            const shortDesc = issue.description.substring(0, 60).replace(/\n/g, ' ');
+            prompt += `${i+1}. ${issue.criterion.split(' ')[0]} - ${shortDesc}...\n`;
+        });
+        prompt += `\n`;
 
-        if (errors.length > 0) {
-            errors.forEach((issue, index) => {
-                prompt += `${index + 1}. [ERROR] ${issue.criterion}: ${issue.description}\n`;
-            });
-        }
-        if (warnings.length > 0) {
-            warnings.forEach((issue, index) => {
-                prompt += `${errors.length + index + 1}. [WARN] ${issue.criterion}: ${issue.description}\n`;
-            });
-        }
-        if (info.length > 0) {
-            info.forEach((issue, index) => {
-                prompt += `${errors.length + warnings.length + index + 1}. [INFO] ${issue.criterion}: ${issue.description}\n`;
-            });
-        }
-
-        // Simple, clear instructions
-        prompt += `\nINSTRUCTIONS:`;
-        prompt += `\n1. Read the key files listed above (2-3 files max)`;
-        prompt += `\n2. Fix the issues by adding:`;
-        prompt += `\n   - Semantic HTML landmarks (<header>, <main>, <nav>, <footer>)`;
-        prompt += `\n   - Proper heading hierarchy (h1 → h2 → h3, no skips)`;
-        prompt += `\n   - ARIA labels for interactive elements`;
-        prompt += `\n   - Form labels and fieldsets`;
-        prompt += `\n3. Use write_file or edit_file to implement changes`;
-        prompt += `\n4. Call attempt_completion when done`;
-        prompt += `\n\nSTART NOW. Read files, implement fixes, complete. Maximum 3 iterations.`;
+        // ULTRA-DIRECTIVE INSTRUCTIONS - NO ambiguity
+        prompt += `⚡ MANDATORY EXECUTION PLAN (FOLLOW EXACTLY):\n`;
+        prompt += `1️⃣ Read the FIRST file listed above using read_file\n`;
+        prompt += `2️⃣ In THE SAME RESPONSE, call write_file or edit_file to fix ALL issues:\n`;
+        prompt += `   • Add semantic landmarks: <header role="banner">, <nav aria-label="Primary">, <main role="main">, <footer role="contentinfo">\n`;
+        prompt += `   • Fix heading hierarchy: Ensure first heading is <h1>, then <h2>, <h3> in order\n`;
+        prompt += `   • Add ARIA labels: aria-label, aria-labelledby for interactive elements\n`;
+        prompt += `   • Label ALL form inputs: <label htmlFor="..."> or aria-label\n`;
+        prompt += `3️⃣ IMMEDIATELY after write_file/edit_file, call attempt_completion with a summary\n\n`;
+        
+        prompt += `⛔ FORBIDDEN:\n`;
+        prompt += `• NO list_directory or grep_search - files are already listed above\n`;
+        prompt += `• NO reading multiple files in separate responses\n`;
+        prompt += `• NO "exploring" or "analyzing" - implement fixes NOW\n`;
+        prompt += `• MAXIMUM 2 tool calls: (1) read_file, (2) write_file/edit_file + attempt_completion\n\n`;
+        
+        prompt += `✅ EXPECTED RESPONSE FORMAT:\n`;
+        prompt += `Call read_file → Call write_file with fixed code → Call attempt_completion\n`;
+        prompt += `ALL THREE TOOLS IN ONE RESPONSE. START IMMEDIATELY.`;
 
         return prompt;
     }
@@ -557,11 +566,17 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
                     clearInterval(checkInterval);
                     this.outputChannel.appendLine(`⏱️ TIMEOUT: Agent exceeded 2 minutes, forcing stop`);
                     
+                    // Extract completion details BEFORE stopping session (to avoid null)
+                    const sessionToExtract = lastKnownSession || session;
+                    const completionResult = sessionToExtract 
+                        ? this._extractCompletionDetails(sessionToExtract)
+                        : { summary: 'Agent timed out.', filesChanged: [] };
+                    
+                    // Now safely stop the session
                     if (this.agentOrchestrator) {
                         this.agentOrchestrator.stopSession();
                     }
                     
-                    const completionResult = this._extractCompletionDetails(lastKnownSession || session);
                     const hasChanges = completionResult.filesChanged.length > 0;
                     
                     resolve({
@@ -578,11 +593,17 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
                     clearInterval(checkInterval);
                     this.outputChannel.appendLine(`🛑 MAX ITERATIONS: Agent reached ${MAX_ITERATIONS} iterations, forcing stop`);
                     
+                    // Extract completion details BEFORE stopping session (to avoid null)
+                    const sessionToExtract = lastKnownSession || session;
+                    const completionResult = sessionToExtract 
+                        ? this._extractCompletionDetails(sessionToExtract)
+                        : { summary: `Agent stopped after ${MAX_ITERATIONS} iterations.`, filesChanged: [] };
+                    
+                    // Now safely stop the session
                     if (this.agentOrchestrator) {
                         this.agentOrchestrator.stopSession();
                     }
                     
-                    const completionResult = this._extractCompletionDetails(lastKnownSession || session);
                     const hasChanges = completionResult.filesChanged.length > 0;
                     
                     resolve({
@@ -664,7 +685,7 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
                         message: `Agent working... (iteration ${session.iterations}/${MAX_ITERATIONS}, ${Math.round(elapsed/1000)}s)`
                     });
                 }
-            }, 1000); // Check every second
+            }, 200); // Check every 200ms for faster completion detection
         });
     }
     
@@ -693,6 +714,11 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
         // Look for attempt_completion tool calls in the session messages
         const filesChanged: Set<string> = new Set();
         let completionSummary = 'Agent completed accessibility fixes.';
+
+        // Safety check for null/undefined session
+        if (!session) {
+            return { summary: 'No session data available.', filesChanged: [] };
+        }
 
         if (session.messages && Array.isArray(session.messages)) {
             for (const message of session.messages) {

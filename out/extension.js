@@ -28,6 +28,7 @@ const vscode = __importStar(require("vscode"));
 const chatWebviewProvider_1 = require("./chatWebviewProvider");
 const testingWebviewProvider_1 = require("./testingWebviewProvider");
 const agentLLMOrchestrator_1 = require("./agentLLMOrchestrator");
+const testingAgentOrchestrator_1 = require("./testingAgentOrchestrator");
 const apiKeyManager_1 = require("./apiKeyManager");
 const geminiChat_1 = require("./geminiChat");
 const anthropicChat_1 = require("./anthropicChat");
@@ -72,10 +73,12 @@ async function activate(context) {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
     const { DiffViewerManager } = await Promise.resolve().then(() => __importStar(require('./diffViewer/DiffViewerManager')));
     DiffViewerManager.getInstance(context, workspaceRoot);
-    // Initialize LLM Agent Orchestrator (before testing provider)
+    // Initialize LLM Agent Orchestrator for CHAT interface (original, untouched)
     const llmAgentOrchestrator = new agentLLMOrchestrator_1.AgentLLMOrchestrator(aiProviderManager, aiProviderManager.getToolManager());
-    // Initialize Testing WebView Provider with agent orchestrator
-    const testingProvider = new testingWebviewProvider_1.TestingWebviewProvider(context.extensionUri, context, llmAgentOrchestrator);
+    // Initialize TESTING Agent Orchestrator (specialized for testing menu with crash fixes)
+    const testingAgentOrchestrator = new testingAgentOrchestrator_1.TestingAgentOrchestrator(aiProviderManager, aiProviderManager.getToolManager());
+    // Initialize Testing WebView Provider with specialized testing orchestrator
+    const testingProvider = new testingWebviewProvider_1.TestingWebviewProvider(context.extensionUri, context, testingAgentOrchestrator);
     // Register webview providers
     context.subscriptions.push(vscode.window.registerWebviewViewProvider('accesslint.chatView', chatProvider), vscode.window.registerWebviewViewProvider('accesslint.testingView', testingProvider));
     // Register Commands

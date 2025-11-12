@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ChatWebviewProvider } from './chatWebviewProvider';
 import { TestingWebviewProvider } from './testingWebviewProvider';
 import { AgentLLMOrchestrator } from './agentLLMOrchestrator';
+import { TestingAgentOrchestrator } from './testingAgentOrchestrator';
 import { ApiKeyManager } from './apiKeyManager';
 import { GeminiChatProvider } from './geminiChat';
 import { AnthropicChatProvider } from './anthropicChat';
@@ -62,17 +63,23 @@ export async function activate(context: vscode.ExtensionContext) {
     const { DiffViewerManager } = await import('./diffViewer/DiffViewerManager');
     DiffViewerManager.getInstance(context, workspaceRoot);
 
-    // Initialize LLM Agent Orchestrator (before testing provider)
+    // Initialize LLM Agent Orchestrator for CHAT interface (original, untouched)
     const llmAgentOrchestrator = new AgentLLMOrchestrator(
         aiProviderManager,
         aiProviderManager.getToolManager()
     );
     
-    // Initialize Testing WebView Provider with agent orchestrator
+    // Initialize TESTING Agent Orchestrator (specialized for testing menu with crash fixes)
+    const testingAgentOrchestrator = new TestingAgentOrchestrator(
+        aiProviderManager,
+        aiProviderManager.getToolManager()
+    );
+    
+    // Initialize Testing WebView Provider with specialized testing orchestrator
     const testingProvider = new TestingWebviewProvider(
         context.extensionUri,
         context,
-        llmAgentOrchestrator
+        testingAgentOrchestrator
     );
     
     // Register webview providers
