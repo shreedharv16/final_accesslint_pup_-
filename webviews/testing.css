@@ -455,11 +455,16 @@ body {
     border-radius: 6px;
 }
 
-.fix-issues-button {
-    width: 100%;
+.action-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+}
+
+.fix-issues-button,
+.download-report-button {
+    flex: 1;
     padding: 12px 20px;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
     border: none;
     border-radius: 4px;
     font-size: 14px;
@@ -469,15 +474,30 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    transition: background-color 0.15s ease;
+    transition: all 0.15s ease;
     font-family: var(--vscode-font-family);
+}
+
+.fix-issues-button {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
 }
 
 .fix-issues-button:hover:not(:disabled) {
     background: var(--vscode-button-hoverBackground);
 }
 
-.fix-issues-button:disabled {
+.download-report-button {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.download-report-button:hover:not(:disabled) {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.fix-issues-button:disabled,
+.download-report-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }

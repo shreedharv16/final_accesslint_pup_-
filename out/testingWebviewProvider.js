@@ -59,6 +59,9 @@ class TestingWebviewProvider {
                 case 'fixIssues':
                     this._handleFixIssues(message.result);
                     break;
+                case 'downloadReport':
+                    this._handleDownloadReport(message.result);
+                    break;
             }
         }, undefined, this.context.subscriptions);
     }
@@ -760,9 +763,14 @@ class TestingWebviewProvider {
             </div>
 
             <div id="fixSection" class="fix-section hidden">
-                <button id="fixIssuesBtn" class="fix-issues-button">
-                    <span class="button-icon">🔧</span> Fix Accessibility Issues
-                </button>
+                <div class="action-buttons">
+                    <button id="fixIssuesBtn" class="fix-issues-button">
+                        <span class="button-icon">🔧</span> Fix Accessibility Issues
+                    </button>
+                    <button id="downloadReportBtn" class="download-report-button">
+                        <span class="button-icon">📄</span> Download Report (PDF)
+                    </button>
+                </div>
                 <div id="fixProgress" class="fix-progress hidden">
                     <div class="fix-status">
                         <div class="spinner"></div>
@@ -785,6 +793,320 @@ class TestingWebviewProvider {
     <script src="${scriptUri}"></script>
 </body>
 </html>`;
+    }
+    async _handleDownloadReport(testResult) {
+        try {
+            this.outputChannel.appendLine('📄 Generating PDF report...');
+            // Generate PDF content
+            const pdfContent = this._generatePDFContent(testResult);
+            // Ask user where to save
+            const saveUri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.file(`accessibility-report-${new Date().toISOString().split('T')[0]}.html`),
+                filters: {
+                    'HTML Files': ['html'],
+                    'All Files': ['*']
+                }
+            });
+            if (saveUri) {
+                // Write HTML file (can be opened in browser and printed to PDF)
+                await vscode.workspace.fs.writeFile(saveUri, Buffer.from(pdfContent, 'utf8'));
+                this.outputChannel.appendLine(`✅ Report saved to: ${saveUri.fsPath}`);
+                // Ask if user wants to open the report
+                const openReport = await vscode.window.showInformationMessage('Report saved successfully! Open in browser?', 'Open', 'Close');
+                if (openReport === 'Open') {
+                    await vscode.env.openExternal(saveUri);
+                }
+            }
+        }
+        catch (error) {
+            this.outputChannel.appendLine(`❌ Error generating report: ${error}`);
+            vscode.window.showErrorMessage(`Failed to generate report: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    _generatePDFContent(testResult) {
+        const date = new Date(testResult.timestamp).toLocaleString();
+        const errors = testResult.issues.filter((i) => i.severity === 'error');
+        const warnings = testResult.issues.filter((i) => i.severity === 'warning');
+        const info = testResult.issues.filter((i) => i.severity === 'info');
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accessibility Test Report - ${testResult.url}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #fff;
+        }
+        .header {
+            border-bottom: 3px solid #0078d4;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #0078d4;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        .meta {
+            color: #666;
+            font-size: 14px;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .summary-card {
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        .summary-card.errors {
+            background: #fff4f4;
+            border-color: #d32f2f;
+        }
+        .summary-card.warnings {
+            background: #fff8e1;
+            border-color: #f57c00;
+        }
+        .summary-card.info {
+            background: #e3f2fd;
+            border-color: #1976d2;
+        }
+        .summary-card .count {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .summary-card.errors .count { color: #d32f2f; }
+        .summary-card.warnings .count { color: #f57c00; }
+        .summary-card.info .count { color: #1976d2; }
+        .summary-card .label {
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .section {
+            margin: 40px 0;
+        }
+        .section-title {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .issue {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-left: 4px solid;
+            border-radius: 4px;
+            padding: 20px;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+        .issue.error { border-left-color: #d32f2f; }
+        .issue.warning { border-left-color: #f57c00; }
+        .issue.info { border-left-color: #1976d2; }
+        .issue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .issue-criterion {
+            font-weight: 600;
+            font-size: 16px;
+            color: #333;
+        }
+        .issue-severity {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .issue-severity.error {
+            background: #d32f2f;
+            color: white;
+        }
+        .issue-severity.warning {
+            background: #f57c00;
+            color: white;
+        }
+        .issue-severity.info {
+            background: #1976d2;
+            color: white;
+        }
+        .issue-description {
+            color: #444;
+            margin: 15px 0;
+            line-height: 1.7;
+        }
+        .issue-details {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 14px;
+        }
+        .issue-detail {
+            margin: 8px 0;
+            color: #666;
+        }
+        .issue-detail strong {
+            color: #333;
+            font-weight: 600;
+        }
+        .nvda-text {
+            font-style: italic;
+            color: #0078d4;
+            background: #e3f2fd;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .footer {
+            margin-top: 60px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        @media print {
+            body { padding: 0; }
+            .summary { page-break-after: avoid; }
+            .issue { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 Accessibility Test Report</h1>
+        <div class="meta">
+            <div><strong>URL:</strong> ${testResult.url}</div>
+            <div><strong>Tested:</strong> ${date}</div>
+            <div><strong>Interactions:</strong> ${testResult.summary.totalInteractions} NVDA interactions</div>
+        </div>
+    </div>
+
+    <div class="summary">
+        <div class="summary-card errors">
+            <div class="count">${errors.length}</div>
+            <div class="label">Errors</div>
+        </div>
+        <div class="summary-card warnings">
+            <div class="count">${warnings.length}</div>
+            <div class="label">Warnings</div>
+        </div>
+        <div class="summary-card info">
+            <div class="count">${info.length}</div>
+            <div class="label">Info</div>
+        </div>
+    </div>
+
+    ${errors.length > 0 ? `
+    <div class="section">
+        <h2 class="section-title">❌ Errors (${errors.length})</h2>
+        ${errors.map((issue) => this._generateIssueHTML(issue)).join('')}
+    </div>
+    ` : ''}
+
+    ${warnings.length > 0 ? `
+    <div class="section">
+        <h2 class="section-title">⚠️ Warnings (${warnings.length})</h2>
+        ${warnings.map((issue) => this._generateIssueHTML(issue)).join('')}
+    </div>
+    ` : ''}
+
+    ${info.length > 0 ? `
+    <div class="section">
+        <h2 class="section-title">ℹ️ Info (${info.length})</h2>
+        ${info.map((issue) => this._generateIssueHTML(issue)).join('')}
+    </div>
+    ` : ''}
+
+    <div class="footer">
+        <p>Generated by AccessLint - VSCode Extension</p>
+        <p>Report generated on ${new Date().toLocaleString()}</p>
+        <p style="margin-top: 10px; font-size: 12px;">
+            To save as PDF: Print this page (Ctrl+P / Cmd+P) and select "Save as PDF"
+        </p>
+    </div>
+</body>
+</html>`;
+    }
+    _generateIssueHTML(issue) {
+        const escapeHtml = (text) => {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+        let detailsHTML = '';
+        if (issue.nvdaAnnouncement) {
+            detailsHTML += `
+                <div class="issue-detail">
+                    <strong>📢 NVDA Announced:</strong> <span class="nvda-text">"${escapeHtml(issue.nvdaAnnouncement)}"</span>
+                </div>
+            `;
+        }
+        if (issue.expectedAnnouncement) {
+            detailsHTML += `
+                <div class="issue-detail">
+                    <strong>✅ Expected:</strong> "${escapeHtml(issue.expectedAnnouncement)}"
+                </div>
+            `;
+        }
+        if (issue.element) {
+            detailsHTML += `
+                <div class="issue-detail">
+                    <strong>Element:</strong> ${escapeHtml(issue.element)}
+                </div>
+            `;
+        }
+        if (issue.location) {
+            detailsHTML += `
+                <div class="issue-detail">
+                    <strong>Location:</strong> ${escapeHtml(issue.location)}
+                </div>
+            `;
+        }
+        if (issue.recommendation) {
+            detailsHTML += `
+                <div class="issue-detail">
+                    <strong>💡 Recommendation:</strong> ${escapeHtml(issue.recommendation)}
+                </div>
+            `;
+        }
+        if (issue.source) {
+            detailsHTML += `
+                <div class="issue-detail">
+                    <strong>Source:</strong> ${issue.source === 'basic' ? 'Basic NVDA Validation' : 'AI Comprehensive Validation'}
+                </div>
+            `;
+        }
+        return `
+            <div class="issue ${issue.severity}">
+                <div class="issue-header">
+                    <div class="issue-criterion">${escapeHtml(issue.criterion)}</div>
+                    <span class="issue-severity ${issue.severity}">${issue.severity}</span>
+                </div>
+                <div class="issue-description">${escapeHtml(issue.description)}</div>
+                ${detailsHTML ? `<div class="issue-details">${detailsHTML}</div>` : ''}
+            </div>
+        `;
     }
     dispose() {
         if (this.tester) {

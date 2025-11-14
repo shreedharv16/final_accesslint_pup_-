@@ -20,6 +20,7 @@
     const infoCount = document.getElementById('infoCount');
     const fixSection = document.getElementById('fixSection');
     const fixIssuesBtn = document.getElementById('fixIssuesBtn');
+    const downloadReportBtn = document.getElementById('downloadReportBtn');
     const fixProgress = document.getElementById('fixProgress');
     const fixStatusText = document.getElementById('fixStatusText');
     const fixSummary = document.getElementById('fixSummary');
@@ -75,6 +76,12 @@
         }
     });
 
+    downloadReportBtn.addEventListener('click', () => {
+        if (currentResults) {
+            downloadReport(currentResults);
+        }
+    });
+
     // Functions
     function startTest(url) {
         // Hide empty state and results
@@ -120,11 +127,12 @@
         warningCount.textContent = result.summary.warnings;
         infoCount.textContent = result.summary.info;
 
-        // Show fix button if there are issues
+        // Show fix and download buttons if there are issues
         const totalIssues = result.summary.errors + result.summary.warnings;
         if (totalIssues > 0) {
             fixSection.classList.remove('hidden');
             fixIssuesBtn.disabled = false;
+            downloadReportBtn.disabled = false;
             fixProgress.classList.add('hidden');
             fixSummary.classList.add('hidden');
         } else {
@@ -236,6 +244,14 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function downloadReport(testResult) {
+        // Send message to extension to generate and download PDF
+        vscode.postMessage({
+            type: 'downloadReport',
+            result: testResult
+        });
     }
 
     // Message handler
