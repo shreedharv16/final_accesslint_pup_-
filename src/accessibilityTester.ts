@@ -922,7 +922,7 @@ Return ONLY valid JSON, no markdown, no code blocks, just the raw JSON object.`;
     }
 
     /**
-     * Call AI provider with prompt
+     * Call AI provider with prompt (bypassing tool parsing)
      */
     private async callAI(prompt: string): Promise<string> {
         if (!this.aiProviderManager) {
@@ -935,10 +935,24 @@ Return ONLY valid JSON, no markdown, no code blocks, just the raw JSON object.`;
 
 ${prompt}`;
 
-            // Call the AI provider using sendMessage
-            const response = await this.aiProviderManager.sendMessage(fullPrompt);
+            // Get the provider directly and call without tool parsing
+            const provider = (this.aiProviderManager as any).openaiProvider || 
+                           (this.aiProviderManager as any).anthropicProvider || 
+                           (this.aiProviderManager as any).geminiProvider;
 
-            return response.text;
+            if (!provider) {
+                throw new Error('No AI provider available');
+            }
+
+            // Call provider's sendMessage directly (bypasses tool parsing)
+            let response: string;
+            if (provider.sendMessage) {
+                response = await provider.sendMessage(fullPrompt, false); // false = don't use history
+            } else {
+                throw new Error('Provider does not support sendMessage');
+            }
+
+            return response;
         } catch (error) {
             this.outputChannel.appendLine(`❌ AI call failed: ${error}`);
             throw error;

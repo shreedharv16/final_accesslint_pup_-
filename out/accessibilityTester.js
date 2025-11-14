@@ -749,7 +749,7 @@ Perform comprehensive WCAG 2.1 Level AA analysis. Find issues that basic validat
 Return ONLY valid JSON, no markdown, no code blocks, just the raw JSON object.`;
     }
     /**
-     * Call AI provider with prompt
+     * Call AI provider with prompt (bypassing tool parsing)
      */
     async callAI(prompt) {
         if (!this.aiProviderManager) {
@@ -760,9 +760,22 @@ Return ONLY valid JSON, no markdown, no code blocks, just the raw JSON object.`;
             const fullPrompt = `You are an accessibility expert specializing in WCAG 2.1 Level AA compliance analysis. You analyze NVDA screen reader output and provide detailed accessibility insights.
 
 ${prompt}`;
-            // Call the AI provider using sendMessage
-            const response = await this.aiProviderManager.sendMessage(fullPrompt);
-            return response.text;
+            // Get the provider directly and call without tool parsing
+            const provider = this.aiProviderManager.openaiProvider ||
+                this.aiProviderManager.anthropicProvider ||
+                this.aiProviderManager.geminiProvider;
+            if (!provider) {
+                throw new Error('No AI provider available');
+            }
+            // Call provider's sendMessage directly (bypasses tool parsing)
+            let response;
+            if (provider.sendMessage) {
+                response = await provider.sendMessage(fullPrompt, false); // false = don't use history
+            }
+            else {
+                throw new Error('Provider does not support sendMessage');
+            }
+            return response;
         }
         catch (error) {
             this.outputChannel.appendLine(`❌ AI call failed: ${error}`);
