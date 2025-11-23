@@ -6,6 +6,7 @@ import { createAgentSystemPrompt } from './agentSystemPrompt';
 import { TodoListManager } from './todoListManager';
 import { TodoList } from './types';
 import { FileContextTracker } from './fileContextTracker';
+import { BackendApiClient } from './services/backendApiClient';
 
 export interface LLMAgentConfig {
   maxIterations: number;
@@ -62,6 +63,8 @@ export class TestingAgentOrchestrator {
   private config: LLMAgentConfig;
   private outputChannel: vscode.OutputChannel;
   private fileContextTracker: FileContextTracker;
+  private backendApiClient: BackendApiClient;
+  private backendSessionId?: string;
   
   // Loop detection and state management
   private recentToolCalls: Map<string, { count: number; lastCall: number }> = new Map();
@@ -74,10 +77,12 @@ export class TestingAgentOrchestrator {
 
   constructor(
     aiProviderManager: AiProviderManager,
-    toolManager: ToolManager
+    toolManager: ToolManager,
+    backendApiClient: BackendApiClient
   ) {
     this.aiProviderManager = aiProviderManager;
     this.toolManager = toolManager;
+    this.backendApiClient = backendApiClient;
     this.todoListManager = new TodoListManager(aiProviderManager);
     this.outputChannel = vscode.window.createOutputChannel('AccessLint Testing Agent');
     
@@ -129,6 +134,21 @@ export class TestingAgentOrchestrator {
     
     // CRITICAL FIX: Clear all provider conversation histories for new agent session
     await this.aiProviderManager.startNewSessions();
+
+    // Create session in backend if in backend mode
+    const vsConfig = vscode.workspace.getConfiguration('accesslint');
+    const useBackendMode = vsConfig.get('useBackendMode', true);
+    
+    if (useBackendMode && this.backendApiClient.isAuthenticated()) {
+      try {
+        const backendSession = await this.backendApiClient.startAgentSession(goal, 'testing');
+        this.backendSessionId = backendSession.id;
+        this.outputChannel.appendLine(`✅ Backend session created: ${backendSession.id}`);
+      } catch (error) {
+        this.outputChannel.appendLine(`⚠️ Failed to create backend session: ${error}`);
+        // Continue with offline mode
+      }
+    }
 
     this.config.provider = provider;
     this.outputChannel.appendLine(`🤖 Agent Session Started: ${goal}`);

@@ -28,6 +28,7 @@ const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const accessibilityTester_1 = require("./accessibilityTester");
+const accessibilityPatterns_1 = require("./accessibilityPatterns");
 class TestingWebviewProvider {
     constructor(_extensionUri, context, agentOrchestrator) {
         this._extensionUri = _extensionUri;
@@ -393,43 +394,54 @@ class TestingWebviewProvider {
         }
     }
     _createEnhancedFixPrompt(testResult, workspaceInfo) {
-        // ULTRA-DIRECTIVE PROMPT - Forces immediate implementation, no exploration loops
+        // ENHANCED PROMPT with Pattern Intelligence
         const route = workspaceInfo.routePath || 'home';
         const framework = workspaceInfo.framework || 'this';
-        let prompt = `🎯 URGENT FIX REQUIRED for /${route} route in ${framework} project.\n\n`;
+        let prompt = `🎯 ACCESSIBILITY FIX REQUIRED for /${route} route in ${framework} project.\n\n`;
         // List files compactly
         if (workspaceInfo.files && workspaceInfo.files.length > 0) {
             const fileList = workspaceInfo.files.slice(0, 4).join(', ');
-            prompt += `📁 TARGET FILES: ${fileList}\n\n`;
+            prompt += `📁 PRIMARY TARGET FILES: ${fileList}\n\n`;
         }
-        // List issues compactly
+        // List issues with details
         const errors = testResult.issues.filter(i => i.severity === 'error');
         const warnings = testResult.issues.filter(i => i.severity === 'warning');
         const info = testResult.issues.filter(i => i.severity === 'info');
         const allIssues = [...errors, ...warnings, ...info];
-        prompt += `🐛 ACCESSIBILITY ISSUES (${allIssues.length} total):\n`;
+        prompt += `🐛 DETECTED ACCESSIBILITY ISSUES (${allIssues.length} total):\n\n`;
         allIssues.forEach((issue, i) => {
-            const shortDesc = issue.description.substring(0, 60).replace(/\n/g, ' ');
-            prompt += `${i + 1}. ${issue.criterion.split(' ')[0]} - ${shortDesc}...\n`;
+            prompt += `${i + 1}. **${issue.criterion}** (${issue.severity})\n`;
+            prompt += `   ${issue.description}\n`;
+            if (issue.nvdaAnnouncement) {
+                prompt += `   NVDA: "${issue.nvdaAnnouncement}"\n`;
+            }
+            prompt += `\n`;
         });
-        prompt += `\n`;
-        // ULTRA-DIRECTIVE INSTRUCTIONS - NO ambiguity
-        prompt += `⚡ MANDATORY EXECUTION PLAN (FOLLOW EXACTLY):\n`;
-        prompt += `1️⃣ Read the FIRST file listed above using read_file\n`;
-        prompt += `2️⃣ In THE SAME RESPONSE, call write_file or edit_file to fix ALL issues:\n`;
-        prompt += `   • Add semantic landmarks: <header role="banner">, <nav aria-label="Primary">, <main role="main">, <footer role="contentinfo">\n`;
-        prompt += `   • Fix heading hierarchy: Ensure first heading is <h1>, then <h2>, <h3> in order\n`;
-        prompt += `   • Add ARIA labels: aria-label, aria-labelledby for interactive elements\n`;
-        prompt += `   • Label ALL form inputs: <label htmlFor="..."> or aria-label\n`;
-        prompt += `3️⃣ IMMEDIATELY after write_file/edit_file, call attempt_completion with a summary\n\n`;
-        prompt += `⛔ FORBIDDEN:\n`;
-        prompt += `• NO list_directory or grep_search - files are already listed above\n`;
-        prompt += `• NO reading multiple files in separate responses\n`;
-        prompt += `• NO "exploring" or "analyzing" - implement fixes NOW\n`;
-        prompt += `• MAXIMUM 2 tool calls: (1) read_file, (2) write_file/edit_file + attempt_completion\n\n`;
-        prompt += `✅ EXPECTED RESPONSE FORMAT:\n`;
-        prompt += `Call read_file → Call write_file with fixed code → Call attempt_completion\n`;
-        prompt += `ALL THREE TOOLS IN ONE RESPONSE. START IMMEDIATELY.`;
+        // Add pattern-based intelligence
+        prompt += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        prompt += (0, accessibilityPatterns_1.generateEnhancedAccessibilityPrompt)(allIssues, { framework, route });
+        prompt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+        // EXECUTION INSTRUCTIONS
+        prompt += `⚡ EXECUTION STRATEGY:\n\n`;
+        prompt += `1️⃣ **Read Target Files**: Use read_file to examine the files listed above\n\n`;
+        prompt += `2️⃣ **Apply Pattern-Based Fixes**: Fix ALL issues using the pattern strategies above:\n`;
+        prompt += `   • Use semantic HTML elements (button, a, header, nav, main, footer)\n`;
+        prompt += `   • Add proper labels to ALL form inputs\n`;
+        prompt += `   • Link error messages with aria-describedby\n`;
+        prompt += `   • Add skip links and landmarks\n`;
+        prompt += `   • Refactor clickable divs/spans to proper elements\n`;
+        prompt += `   • Add alt text to images (and search for same image across project)\n\n`;
+        prompt += `3️⃣ **Search for Similar Issues**: After fixing the primary file:\n`;
+        prompt += `   • Use grep_search to find similar patterns across the project\n`;
+        prompt += `   • Example: If you fix an image alt text, search for the same image elsewhere\n`;
+        prompt += `   • Example: If you fix a clickable div, search for other clickable divs\n`;
+        prompt += `   • Apply the SAME fix pattern to ALL similar instances\n\n`;
+        prompt += `4️⃣ **Complete**: Call attempt_completion with:\n`;
+        prompt += `   • Summary of what you fixed\n`;
+        prompt += `   • List of ALL files you modified\n`;
+        prompt += `   • Patterns you applied\n\n`;
+        prompt += `🎯 GOAL: Fix not just these specific issues, but ALL similar issues across the project!\n`;
+        prompt += `Use the pattern intelligence above to implement comprehensive, project-wide accessibility improvements.`;
         return prompt;
     }
     _createFixPrompt(testResult) {
@@ -481,18 +493,25 @@ class TestingWebviewProvider {
                 prompt += '\n';
             });
         }
+        // Add pattern-based intelligence
+        const allIssues = [...errors, ...warnings, ...info];
+        prompt += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        prompt += (0, accessibilityPatterns_1.getPatternRecommendations)(allIssues.map(i => i.description));
+        prompt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
         prompt += `\n## Your Task:\n`;
         prompt += `1. Analyze the workspace to find the HTML/React/Vue files for this website\n`;
-        prompt += `2. Fix each accessibility issue by:\n`;
-        prompt += `   - Adding proper semantic HTML elements\n`;
-        prompt += `   - Adding ARIA labels and roles where needed\n`;
-        prompt += `   - Fixing heading hierarchy\n`;
-        prompt += `   - Adding alt text to images\n`;
-        prompt += `   - Ensuring proper reading order\n`;
-        prompt += `   - Making interactive elements keyboard accessible\n`;
-        prompt += `3. Use write_file or edit_file tools to make the changes\n`;
-        prompt += `4. Focus on fixing the errors first, then warnings\n\n`;
-        prompt += `Please start by exploring the workspace structure to understand the project, then fix the issues systematically.`;
+        prompt += `2. Apply the pattern-based fixes shown above to fix ALL issues:\n`;
+        prompt += `   - Use semantic HTML elements (header, nav, main, footer, button, a)\n`;
+        prompt += `   - Add proper labels to ALL form inputs\n`;
+        prompt += `   - Add alt text to images (search for same image across project!)\n`;
+        prompt += `   - Fix heading hierarchy (h1 → h2 → h3)\n`;
+        prompt += `   - Add skip links and landmarks\n`;
+        prompt += `   - Refactor clickable divs/spans to proper buttons/links\n`;
+        prompt += `   - Ensure keyboard accessibility\n`;
+        prompt += `3. Use grep_search to find similar issues across the project\n`;
+        prompt += `4. Apply the SAME fix pattern to ALL similar instances\n`;
+        prompt += `5. Focus on fixing the errors first, then warnings\n\n`;
+        prompt += `🎯 GOAL: Fix not just these issues, but ALL similar issues project-wide using the patterns above!`;
         return prompt;
     }
     async _waitForAgentCompletion(sessionId, startTime) {

@@ -8,6 +8,7 @@ import { GeminiChatProvider } from './geminiChat';
 import { AnthropicChatProvider } from './anthropicChat';
 import { OpenAIChatProvider } from './openaiChat';
 import { AiProviderManager } from './aiProviderManager';
+import { BackendApiClient } from './services/backendApiClient';
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🚀 AccessLint extension is now active!');
@@ -17,6 +18,63 @@ export async function activate(context: vscode.ExtensionContext) {
     debugChannel.appendLine('🔍 AccessLint Debug Channel Activated');
     debugChannel.appendLine('💡 To see these logs: View > Output > Select "AccessLint Debug" from dropdown');
     debugChannel.show(); // Show the debug channel immediately
+
+    // Initialize Backend API Client
+    const backendApiClient = new BackendApiClient(context);
+    debugChannel.appendLine('🌐 Backend API Client initialized');
+
+    // Check if backend mode is enabled
+    const vsConfig = vscode.workspace.getConfiguration('accesslint');
+    const useBackendMode = vsConfig.get('useBackendMode', true);
+    
+    if (useBackendMode) {
+        debugChannel.appendLine('🔄 Backend mode enabled');
+        
+        // Check authentication status
+        if (!backendApiClient.isAuthenticated()) {
+            debugChannel.appendLine('⚠️ User not authenticated');
+            const result = await vscode.window.showWarningMessage(
+                'AccessLint: Please login to use the extension',
+                'Login',
+                'Use Offline Mode'
+            );
+            
+            if (result === 'Login') {
+                const webAppUrl = vsConfig.get('webAppUrl', 'http://localhost:3001');
+                await vscode.env.openExternal(vscode.Uri.parse(`${webAppUrl}/login`));
+                vscode.window.showInformationMessage(
+                    'After logging in and downloading the VSIX, please reload the window.',
+                    'Reload Window'
+                ).then(selection => {
+                    if (selection === 'Reload Window') {
+                        vscode.commands.executeCommand('workbench.action.reloadWindow');
+                    }
+                });
+                return; // Don't continue activation until authenticated
+            } else {
+                // User chose offline mode
+                await vsConfig.update('useBackendMode', false, vscode.ConfigurationTarget.Global);
+                debugChannel.appendLine('📴 Switched to offline mode');
+            }
+        } else {
+            debugChannel.appendLine('✅ User authenticated');
+            
+            // Show authenticated user info in status bar
+            try {
+                const user = await backendApiClient.getCurrentUser();
+                const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+                statusBar.text = `$(account) ${user.email}`;
+                statusBar.tooltip = 'AccessLint - Logged in';
+                statusBar.show();
+                context.subscriptions.push(statusBar);
+                debugChannel.appendLine(`👤 Logged in as: ${user.email}`);
+            } catch (error) {
+                debugChannel.appendLine(`⚠️ Failed to fetch user info: ${error}`);
+            }
+        }
+    } else {
+        debugChannel.appendLine('📴 Using offline mode');
+    }
 
     // Initialize API Key Manager
     const apiKeyManager = new ApiKeyManager(context);
@@ -52,7 +110,8 @@ export async function activate(context: vscode.ExtensionContext) {
     const chatProvider = new ChatWebviewProvider(
         context.extensionUri,
         context,
-        aiProviderManager
+        aiProviderManager,
+        backendApiClient
     );
 
     // Set up AI Provider Manager with webview
@@ -66,20 +125,23 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize LLM Agent Orchestrator for CHAT interface (original, untouched)
     const llmAgentOrchestrator = new AgentLLMOrchestrator(
         aiProviderManager,
-        aiProviderManager.getToolManager()
+        aiProviderManager.getToolManager(),
+        backendApiClient
     );
     
     // Initialize TESTING Agent Orchestrator (specialized for testing menu with crash fixes)
     const testingAgentOrchestrator = new TestingAgentOrchestrator(
         aiProviderManager,
-        aiProviderManager.getToolManager()
+        aiProviderManager.getToolManager(),
+        backendApiClient
     );
     
     // Initialize Testing WebView Provider with specialized testing orchestrator
     const testingProvider = new TestingWebviewProvider(
         context.extensionUri,
         context,
-        testingAgentOrchestrator
+        testingAgentOrchestrator,
+        backendApiClient
     );
     
     // Register webview providers
@@ -219,6 +281,25 @@ Started: ${status.startTime.toLocaleTimeString()}`;
         }
     });
 
+    // Logout Command (for backend mode)
+    const logoutCommand = vscode.commands.registerCommand('accesslint.logout', async () => {
+        const confirm = await vscode.window.showWarningMessage(
+            'Are you sure you want to logout?',
+            'Yes',
+            'No'
+        );
+        
+        if (confirm === 'Yes') {
+            try {
+                await backendApiClient.logout();
+                vscode.window.showInformationMessage('✅ Logged out successfully. Please reload the window.');
+                await vscode.commands.executeCommand('workbench.action.reloadWindow');
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to logout: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
+    });
+
     // Add to subscriptions for proper cleanup
     context.subscriptions.push(
         configureApiKeyCommand,
@@ -236,6 +317,8 @@ Started: ${status.startTime.toLocaleTimeString()}`;
         // Token usage commands
         showTokenStatsCommand,
         configureContextTruncationCommand,
+        // Backend commands
+        logoutCommand,
         chatProvider,
         testingProvider,
         geminiChatProvider,

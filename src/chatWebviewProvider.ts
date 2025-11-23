@@ -4,6 +4,7 @@ import { AnthropicChatProvider } from './anthropicChat';
 import { OpenAIChatProvider } from './openaiChat';
 import { AiProviderManager } from './aiProviderManager';
 import { RetryUtils, RetryEventListener } from './retryUtils';
+import { BackendApiClient } from './services/backendApiClient';
 
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'accesslint.chatView';
@@ -11,13 +12,17 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private aiProviderManager: AiProviderManager;
   private retryEventListener: RetryEventListener;
+  private backendApiClient: BackendApiClient;
+  private currentConversationId?: string;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
     protected readonly context: vscode.ExtensionContext,
-    aiProviderManager: AiProviderManager
+    aiProviderManager: AiProviderManager,
+    backendApiClient: BackendApiClient
   ) {
     this.aiProviderManager = aiProviderManager;
+    this.backendApiClient = backendApiClient;
     
     // Initialize retry event listener for UI feedback
     this.retryEventListener = {
@@ -100,6 +105,26 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         isLoading: true
       });
 
+      // Log to backend if authenticated
+      const vsConfig = vscode.workspace.getConfiguration('accesslint');
+      const useBackendMode = vsConfig.get('useBackendMode', true);
+      
+      if (useBackendMode && this.backendApiClient.isAuthenticated()) {
+        try {
+          // Create conversation if not exists
+          if (!this.currentConversationId) {
+            const conversation = await this.backendApiClient.createChatConversation(
+              mode === 'agent' ? 'agent' : 'chat',
+              `Chat - ${new Date().toLocaleString()}`
+            );
+            this.currentConversationId = conversation.id;
+          }
+        } catch (error) {
+          console.error('Failed to create conversation:', error);
+          // Continue with offline mode
+        }
+      }
+
       if (mode === 'agent') {
         // For agent mode, trigger the LLM Agent Orchestrator
         // Don't send the activation message - just show the todo dropdown when created
@@ -145,6 +170,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         const response = await this.aiProviderManager.sendMessage(fullMessage, provider as any);
         
         console.log(`✅ Response received: ${response.text?.substring(0, 100)}...`);
+
+        // Log to backend if in backend mode
+        if (useBackendMode && this.backendApiClient.isAuthenticated() && this.currentConversationId) {
+          try {
+            await this.backendApiClient.sendChatMessage(this.currentConversationId, fullMessage);
+          } catch (error) {
+            console.error('Failed to log chat message to backend:', error);
+            // Continue with offline mode
+          }
+        }
 
         // Send AI response
         this._view.webview.postMessage({
@@ -295,6 +330,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         type: 'clearChat'
       });
     }
+    // Reset conversation ID for new conversation
+    this.currentConversationId = undefined;
   }
 
   public postMessage(message: any): void {
