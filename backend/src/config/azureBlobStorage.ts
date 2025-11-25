@@ -89,7 +89,7 @@ export async function downloadBlob(containerName: string, blobName: string): Pro
 
         if (downloadResponse.readableStreamBody) {
             for await (const chunk of downloadResponse.readableStreamBody) {
-                chunks.push(chunk);
+                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
             }
         }
 
