@@ -154,8 +154,8 @@
         const currentMode = modeSelector ? modeSelector.value : 'quick';
         
         // Get current provider from selector  
-        const providerSelector = document.getElementById('provider-selector');
-        const currentProvider = providerSelector ? providerSelector.value : 'gemini';
+        // Always use GPT-5 (hardcoded)
+        const currentProvider = 'openai';
 
         vscode.postMessage({
             type: 'sendMessage',

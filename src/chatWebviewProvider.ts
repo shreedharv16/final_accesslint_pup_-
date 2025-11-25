@@ -431,42 +431,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             background-color: var(--vscode-button-secondaryHoverBackground);
         }
         
-        .api-config-button {
-            padding: 6px 10px;
-            border: 1px solid var(--vscode-button-border);
-            background-color: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-            border-radius: 4px;
-            cursor: pointer;
+        .ai-badge {
+            padding: 6px 12px;
+            border-radius: 12px;
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
             font-size: 11px;
-            transition: background-color 0.2s;
-        }
-        
-        .api-config-button:hover {
-            background-color: var(--vscode-button-secondaryHoverBackground);
-        }
-        
-        .provider-selector {
+            font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--vscode-widget-border);
-            margin-bottom: 10px;
-        }
-        
-        .provider-label {
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-        }
-        
-        .provider-select {
-            background-color: var(--vscode-dropdown-background);
-            color: var(--vscode-dropdown-foreground);
-            border: 1px solid var(--vscode-dropdown-border);
-            border-radius: 4px;
-            padding: 4px 8px;
-            font-size: 11px;
+            gap: 4px;
         }
         
         .chat-container {
@@ -665,27 +639,17 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 <button class="mode-button active" id="quickMode" data-mode="quick">Quick</button>
                 <button class="mode-button" id="agentMode" data-mode="agent">Agent</button>
           </div>
-            <button class="api-config-button" id="configButton">⚙️ API Keys</button>
+            <div class="ai-badge">🤖 GPT-5</div>
             </div>
           </div>
-
-    <!-- AI Provider Selector -->
-    <div class="provider-selector">
-        <span class="provider-label">AI Provider:</span>
-        <select class="provider-select" id="providerSelect">
-            <option value="gemini">Google Gemini</option>
-            <option value="anthropic">Anthropic Claude</option>
-            <option value="openai">OpenAI GPT</option>
-                </select>
-              </div>
 
     <!-- Chat Container -->
     <div class="chat-container" id="chatContainer">
         <div class="message ai-message">
-            <div>👋 Welcome to AccessLint! I'm your AI coding assistant.</div>
+            <div>👋 Welcome to AccessLint! I'm your AI coding assistant powered by GPT-5.</div>
             <div><strong>Quick Mode:</strong> Direct chat with manual tool selection</div>
             <div><strong>Agent Mode:</strong> Autonomous AI that automatically uses tools</div>
-            <div>Configure your API keys and start chatting!</div>
+            <div>Start chatting to get accessibility help!</div>
             <div class="timestamp">Ready to help</div>
             </div>
           </div>

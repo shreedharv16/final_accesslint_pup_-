@@ -1,9 +1,11 @@
 import { AzureOpenAI } from 'openai';
-import dotenv from 'dotenv';
 import logger from '../utils/logger';
-import { getSecret } from './azureKeyVault';
 
-dotenv.config();
+// HARDCODED AZURE OPENAI CREDENTIALS
+const AZURE_OPENAI_ENDPOINT = 'https://ctonpsiotspocopenai.cognitiveservices.azure.com/';
+const AZURE_OPENAI_API_KEY = 'BMnLqzun2vpeAAxx4P95sKJND31hGejLauqID6pwgWqWONZNxNcQJQQJ99BIACYeBjFXJ3w3AAABACOG3jDa';
+const AZURE_OPENAI_DEPLOYMENT = 'gpt-5';
+const AZURE_OPENAI_API_VERSION = '2024-02-15-preview';
 
 let openaiClient: AzureOpenAI | null = null;
 
@@ -15,29 +17,20 @@ export interface OpenAIConfig {
 }
 
 /**
- * Initialize Azure OpenAI client
+ * Initialize Azure OpenAI client with hardcoded credentials
  */
 export async function initializeOpenAI(): Promise<void> {
     try {
-        // Get secrets from Key Vault or environment
-        const endpoint = await getSecret('AZURE-OPENAI-ENDPOINT') || process.env.AZURE_OPENAI_ENDPOINT;
-        const apiKey = await getSecret('AZURE-OPENAI-KEY') || process.env.AZURE_OPENAI_KEY;
-        const deployment = process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o';
-        const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2024-02-15-preview';
-
-        if (!endpoint || !apiKey) {
-            throw new Error('Azure OpenAI credentials not found');
-        }
-
         openaiClient = new AzureOpenAI({
-            endpoint,
-            apiKey,
-            apiVersion,
-            deployment
+            endpoint: AZURE_OPENAI_ENDPOINT,
+            apiKey: AZURE_OPENAI_API_KEY,
+            apiVersion: AZURE_OPENAI_API_VERSION,
+            deployment: AZURE_OPENAI_DEPLOYMENT
         });
 
         logger.info('✅ Azure OpenAI client initialized');
-        logger.info(`🤖 Deployment: ${deployment}`);
+        logger.info(`🤖 Model: ${AZURE_OPENAI_DEPLOYMENT}`);
+        logger.info(`🌐 Endpoint: ${AZURE_OPENAI_ENDPOINT}`);
     } catch (error) {
         logger.error('❌ Failed to initialize Azure OpenAI:', error);
         throw error;
@@ -68,23 +61,22 @@ export async function chatCompletion(
 ): Promise<string> {
     try {
         const client = getOpenAIClient();
-        const deployment = process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o';
 
         const response = await client.chat.completions.create({
-            model: deployment,
+            model: AZURE_OPENAI_DEPLOYMENT,
             messages,
             max_tokens: options?.maxTokens || 4000,
             temperature: options?.temperature || 0.7,
-            stream: options?.stream || false
-        });
+            stream: false // Always use non-streaming mode
+        }) as any;
 
         const content = response.choices[0]?.message?.content || '';
         
-        logger.info(`✅ OpenAI completion (tokens: ${response.usage?.total_tokens || 0})`);
+        logger.info(`✅ GPT-5 completion (tokens: ${response.usage?.total_tokens || 0})`);
 
         return content;
     } catch (error) {
-        logger.error('❌ Error in OpenAI chat completion:', error);
+        logger.error('❌ Error in GPT-5 chat completion:', error);
         throw error;
     }
 }

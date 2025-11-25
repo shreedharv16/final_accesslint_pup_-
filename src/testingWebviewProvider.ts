@@ -198,26 +198,8 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
         }
 
         try {
-            // Ask user which provider to use
-            const providerChoice = await vscode.window.showQuickPick([
-                { label: 'Azure OpenAI (GPT)', value: 'openai' as const, description: 'Uses Azure OpenAI GPT model' },
-                { label: 'Anthropic (Claude)', value: 'anthropic' as const, description: 'Uses Claude Sonnet' },
-                { label: 'Gemini', value: 'gemini' as const, description: 'Uses Google Gemini' }
-            ], {
-                placeHolder: 'Select AI provider to fix accessibility issues',
-                title: '🔧 Choose AI Provider for Fixing'
-            });
-
-            if (!providerChoice) {
-                // User cancelled
-                if (this._view) {
-                    this._view.webview.postMessage({
-                        type: 'fixingError',
-                        error: 'Provider selection cancelled'
-                    });
-                }
-                return;
-            }
+            // Using hardcoded GPT-5 provider
+            const providerValue = 'openai' as const;
 
             // Send fixing started message
             this._view.webview.postMessage({
@@ -226,7 +208,7 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
 
             this.outputChannel.appendLine('='.repeat(80));
             this.outputChannel.appendLine(`🔧 Starting Automated Accessibility Fixes`);
-            this.outputChannel.appendLine(`🤖 Using provider: ${providerChoice.label}`);
+            this.outputChannel.appendLine(`🤖 Using AI Model: GPT-5 (Azure OpenAI)`);
             this.outputChannel.appendLine('='.repeat(80));
 
             // Pre-explore workspace to find relevant files
@@ -236,8 +218,8 @@ export class TestingWebviewProvider implements vscode.WebviewViewProvider {
             // Convert test results to agent prompt with workspace context
             const fixPrompt = this._createEnhancedFixPrompt(testResult, workspaceInfo);
 
-            // Start agent session with the fix prompt using selected provider
-            const sessionId = await this.agentOrchestrator.startSession(fixPrompt, providerChoice.value);
+            // Start agent session with the fix prompt using GPT-5
+            const sessionId = await this.agentOrchestrator.startSession(fixPrompt, providerValue);
             
             // CRITICAL: Store session start time for timeout detection
             const sessionStartTime = Date.now();
