@@ -95,4 +95,5 @@ exports.DebugLog = DebugLog = __decorate([
         timestamps: false
     })
 ], DebugLog);
+exports.default = DebugLog;
 //# sourceMappingURL=debugLog.model.js.map

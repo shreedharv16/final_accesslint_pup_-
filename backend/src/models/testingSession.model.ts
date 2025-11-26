@@ -87,3 +87,5 @@ export class TestingSession extends Model {
     fixes!: TestingFix[];
 }
 
+export default TestingSession;
+

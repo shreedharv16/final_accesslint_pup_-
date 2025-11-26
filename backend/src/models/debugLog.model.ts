@@ -73,3 +73,5 @@ export class DebugLog extends Model {
     user?: User;
 }
 
+export default DebugLog;
+

@@ -9,4 +9,5 @@ export declare class VsixDownload extends Model {
     userAgent?: string;
     user: User;
 }
+export default VsixDownload;
 //# sourceMappingURL=vsixDownload.model.d.ts.map

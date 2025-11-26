@@ -106,4 +106,5 @@ exports.AgentIteration = AgentIteration = __decorate([
         timestamps: false
     })
 ], AgentIteration);
+exports.default = AgentIteration;
 //# sourceMappingURL=agentIteration.model.js.map

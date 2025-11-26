@@ -15,4 +15,5 @@ export declare class TestingSession extends Model {
     user: User;
     fixes: TestingFix[];
 }
+export default TestingSession;
 //# sourceMappingURL=testingSession.model.d.ts.map

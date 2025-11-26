@@ -92,4 +92,5 @@ exports.Session = Session = __decorate([
         timestamps: false
     })
 ], Session);
+exports.default = Session;
 //# sourceMappingURL=session.model.js.map

@@ -92,4 +92,5 @@ exports.UsageStat = UsageStat = __decorate([
         timestamps: false
     })
 ], UsageStat);
+exports.default = UsageStat;
 //# sourceMappingURL=usageStat.model.js.map

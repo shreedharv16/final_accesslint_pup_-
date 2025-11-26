@@ -92,4 +92,5 @@ exports.ChatConversation = ChatConversation = __decorate([
         timestamps: false
     })
 ], ChatConversation);
+exports.default = ChatConversation;
 //# sourceMappingURL=chatConversation.model.js.map

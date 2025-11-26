@@ -70,3 +70,5 @@ export class UsageStat extends Model {
     user!: User;
 }
 
+export default UsageStat;
+

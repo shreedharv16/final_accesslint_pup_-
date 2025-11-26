@@ -16,4 +16,5 @@ export declare class AgentSession extends Model {
     user: User;
     iterations: AgentIteration[];
 }
+export default AgentSession;
 //# sourceMappingURL=agentSession.model.d.ts.map

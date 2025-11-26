@@ -112,4 +112,5 @@ exports.TestingSession = TestingSession = __decorate([
         timestamps: false
     })
 ], TestingSession);
+exports.default = TestingSession;
 //# sourceMappingURL=testingSession.model.js.map

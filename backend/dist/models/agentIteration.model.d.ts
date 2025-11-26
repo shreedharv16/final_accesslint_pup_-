@@ -13,4 +13,5 @@ export declare class AgentIteration extends Model {
     timestamp: Date;
     session: AgentSession;
 }
+export default AgentIteration;
 //# sourceMappingURL=agentIteration.model.d.ts.map

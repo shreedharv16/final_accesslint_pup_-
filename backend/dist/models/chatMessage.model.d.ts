@@ -10,4 +10,5 @@ export declare class ChatMessage extends Model {
     timestamp: Date;
     conversation: ChatConversation;
 }
+export default ChatMessage;
 //# sourceMappingURL=chatMessage.model.d.ts.map

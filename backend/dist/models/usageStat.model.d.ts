@@ -11,4 +11,5 @@ export declare class UsageStat extends Model {
     timestamp: Date;
     user: User;
 }
+export default UsageStat;
 //# sourceMappingURL=usageStat.model.d.ts.map

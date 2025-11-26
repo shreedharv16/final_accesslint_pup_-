@@ -12,4 +12,5 @@ export declare class ChatConversation extends Model {
     user: User;
     messages: ChatMessage[];
 }
+export default ChatConversation;
 //# sourceMappingURL=chatConversation.model.d.ts.map

@@ -70,3 +70,5 @@ export class Session extends Model {
     user!: User;
 }
 
+export default Session;
+

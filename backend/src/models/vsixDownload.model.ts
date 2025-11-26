@@ -56,3 +56,5 @@ export class VsixDownload extends Model {
     user!: User;
 }
 
+export default VsixDownload;
+

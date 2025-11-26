@@ -89,4 +89,5 @@ exports.TestingFix = TestingFix = __decorate([
         timestamps: false
     })
 ], TestingFix);
+exports.default = TestingFix;
 //# sourceMappingURL=testingFix.model.js.map

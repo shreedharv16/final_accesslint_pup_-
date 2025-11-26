@@ -76,4 +76,5 @@ exports.VsixDownload = VsixDownload = __decorate([
         timestamps: false
     })
 ], VsixDownload);
+exports.default = VsixDownload;
 //# sourceMappingURL=vsixDownload.model.js.map

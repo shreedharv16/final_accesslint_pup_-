@@ -98,3 +98,5 @@ export class AgentSession extends Model {
     iterations!: AgentIteration[];
 }
 
+export default AgentSession;
+

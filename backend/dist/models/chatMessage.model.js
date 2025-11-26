@@ -84,4 +84,5 @@ exports.ChatMessage = ChatMessage = __decorate([
         timestamps: false
     })
 ], ChatMessage);
+exports.default = ChatMessage;
 //# sourceMappingURL=chatMessage.model.js.map

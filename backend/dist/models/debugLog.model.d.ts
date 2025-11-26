@@ -11,4 +11,5 @@ export declare class DebugLog extends Model {
     timestamp: Date;
     user?: User;
 }
+export default DebugLog;
 //# sourceMappingURL=debugLog.model.d.ts.map

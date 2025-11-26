@@ -67,3 +67,5 @@ export class TestingFix extends Model {
     agentSession!: AgentSession;
 }
 
+export default TestingFix;
+

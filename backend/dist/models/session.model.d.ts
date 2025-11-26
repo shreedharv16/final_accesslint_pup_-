@@ -11,4 +11,5 @@ export declare class Session extends Model {
     userAgent?: string;
     user: User;
 }
+export default Session;
 //# sourceMappingURL=session.model.d.ts.map

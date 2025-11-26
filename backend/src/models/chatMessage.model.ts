@@ -63,3 +63,5 @@ export class ChatMessage extends Model {
     conversation!: ChatConversation;
 }
 
+export default ChatMessage;
+

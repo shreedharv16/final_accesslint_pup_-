@@ -20,4 +20,5 @@ export declare class User extends Model {
     vsixDownloads: VsixDownload[];
     toJSON(): any;
 }
+export default User;
 //# sourceMappingURL=user.model.d.ts.map

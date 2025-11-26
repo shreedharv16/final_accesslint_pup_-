@@ -70,3 +70,5 @@ export class ChatConversation extends Model {
     messages!: ChatMessage[];
 }
 
+export default ChatConversation;
+

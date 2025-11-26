@@ -124,4 +124,5 @@ exports.AgentSession = AgentSession = __decorate([
         timestamps: false
     })
 ], AgentSession);
+exports.default = AgentSession;
 //# sourceMappingURL=agentSession.model.js.map

@@ -119,4 +119,5 @@ exports.User = User = __decorate([
         timestamps: false
     })
 ], User);
+exports.default = User;
 //# sourceMappingURL=user.model.js.map
