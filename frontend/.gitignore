@@ -22,7 +22,7 @@ node_modules
 *.sw?
 
 # Environment variables
-.env
+
 .env.local
 .env.production
 
