@@ -4,6 +4,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.models = exports.VsixDownload = exports.UsageStat = exports.DebugLog = exports.TestingFix = exports.TestingSession = exports.AgentIteration = exports.AgentSession = exports.ChatMessage = exports.ChatConversation = exports.Session = exports.User = void 0;
+require("reflect-metadata"); // MUST be first for model decorators
 var user_model_1 = require("./user.model");
 Object.defineProperty(exports, "User", { enumerable: true, get: function () { return user_model_1.User; } });
 var session_model_1 = require("./session.model");

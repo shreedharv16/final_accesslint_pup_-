@@ -2,6 +2,8 @@
  * Export all Sequelize models
  */
 
+import 'reflect-metadata'; // MUST be first for model decorators
+
 export { User } from './user.model';
 export { Session } from './session.model';
 export { ChatConversation } from './chatConversation.model';
