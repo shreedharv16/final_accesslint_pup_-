@@ -1,0 +1,93 @@
+# GitLab CI/CD Pipeline for AccessLint
+# Deploys Backend to Azure App Service and Frontend to Azure Static Web Apps
+
+stages:
+  - build
+  - deploy
+
+variables:
+  BACKEND_DIR: backend
+  FRONTEND_DIR: frontend
+  NODE_VERSION: "18"
+
+# ============================================
+# BACKEND BUILD
+# ============================================
+build-backend:
+  stage: build
+  image: node:${NODE_VERSION}
+  only:
+    - main
+    - master
+  script:
+    - cd $BACKEND_DIR
+    - npm ci
+    - npm run build
+    - mkdir -p ../deploy/backend
+    - cp -r dist/* ../deploy/backend/
+    - cp deploy-package.json ../deploy/backend/package.json
+  artifacts:
+    paths:
+      - deploy/backend/
+    expire_in: 1 hour
+
+# ============================================
+# FRONTEND BUILD
+# ============================================
+build-frontend:
+  stage: build
+  image: node:${NODE_VERSION}
+  only:
+    - main
+    - master
+  script:
+    - cd $FRONTEND_DIR
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - $FRONTEND_DIR/dist/
+    expire_in: 1 hour
+
+# ============================================
+# BACKEND DEPLOYMENT
+# ============================================
+deploy-backend:
+  stage: deploy
+  image: mcr.microsoft.com/azure-cli:latest
+  only:
+    - main
+    - master
+  dependencies:
+    - build-backend
+  before_script:
+    - az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+    - az account set --subscription $AZURE_SUBSCRIPTION_ID
+  script:
+    - cd deploy/backend
+    - zip -r backend-deploy.zip .
+    - az webapp deployment source config-zip --resource-group CTO-NP-SI-OTS-POC-RG --name ctonpsiotspocapp --src backend-deploy.zip
+  environment:
+    name: production-backend
+    url: https://ctonpsiotspocapp.azurewebsites.net
+
+# ============================================
+# FRONTEND DEPLOYMENT (Static Web App)
+# ============================================
+deploy-frontend:
+  stage: deploy
+  image: node:${NODE_VERSION}
+  only:
+    - main
+    - master
+  dependencies:
+    - build-frontend
+  before_script:
+    - npm install -g @azure/static-web-apps-cli
+  script:
+    - cd $FRONTEND_DIR
+    - swa deploy ./dist --deployment-token $AZURE_STATICWEBAPP_TOKEN --env production
+  environment:
+    name: production-frontend
+    url: https://ctonpsiotspocstaticapp.azurestaticapps.net
+
