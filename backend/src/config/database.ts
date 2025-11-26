@@ -1,3 +1,4 @@
+import 'reflect-metadata'; // MUST be first for sequelize-typescript decorators
 import { Sequelize } from 'sequelize-typescript';
 import dotenv from 'dotenv';
 import path from 'path';

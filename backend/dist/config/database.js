@@ -7,6 +7,7 @@ exports.databaseConfig = void 0;
 exports.testConnection = testConnection;
 exports.syncDatabase = syncDatabase;
 exports.closeConnection = closeConnection;
+require("reflect-metadata"); // MUST be first for sequelize-typescript decorators
 const sequelize_typescript_1 = require("sequelize-typescript");
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
