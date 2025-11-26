@@ -1,8 +1,8 @@
 import 'reflect-metadata'; // MUST be first for sequelize-typescript decorators
 import { Sequelize } from 'sequelize-typescript';
 import dotenv from 'dotenv';
-import path from 'path';
 import logger from '../utils/logger';
+import * as models from '../models';
 
 dotenv.config();
 
@@ -41,10 +41,7 @@ export const databaseConfig = {
 // Initialize Sequelize
 const sequelize = new Sequelize({
     ...databaseConfig,
-    models: [path.join(__dirname, '..', 'models')],
-    modelMatch: (filename, member) => {
-        return filename.substring(0, filename.indexOf('.model')) === member.toLowerCase();
-    }
+    models: Object.values(models).filter(m => typeof m === 'function')
 });
 
 // Test connection
