@@ -7,7 +7,12 @@ export declare const databaseConfig: {
     username: string;
     password: string;
     dialect: "postgres";
-    ssl: boolean;
+    dialectOptions: {
+        ssl: boolean | {
+            require: boolean;
+            rejectUnauthorized: boolean;
+        };
+    };
     logging: boolean | ((msg: string) => import("winston").Logger);
     pool: {
         max: number;

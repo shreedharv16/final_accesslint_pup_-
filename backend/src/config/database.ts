@@ -24,7 +24,12 @@ export const databaseConfig = {
     username: POSTGRES_USER,
     password: POSTGRES_PASSWORD,
     dialect: 'postgres' as const,
-    ssl: POSTGRES_SSL === 'true',
+    dialectOptions: {
+        ssl: POSTGRES_SSL === 'true' ? {
+            require: true,
+            rejectUnauthorized: false
+        } : false
+    },
     logging: NODE_ENV === 'development' ? (msg: string) => logger.debug(msg) : false,
     pool: {
         max: 20,

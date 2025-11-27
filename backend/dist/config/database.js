@@ -55,7 +55,12 @@ exports.databaseConfig = {
     username: POSTGRES_USER,
     password: POSTGRES_PASSWORD,
     dialect: 'postgres',
-    ssl: POSTGRES_SSL === 'true',
+    dialectOptions: {
+        ssl: POSTGRES_SSL === 'true' ? {
+            require: true,
+            rejectUnauthorized: false
+        } : false
+    },
     logging: NODE_ENV === 'development' ? (msg) => logger_1.default.debug(msg) : false,
     pool: {
         max: 20,
