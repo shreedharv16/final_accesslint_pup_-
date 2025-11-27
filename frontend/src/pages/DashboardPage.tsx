@@ -12,12 +12,18 @@ interface UsageStats {
   rateLimitTokensPerDay: number;
 }
 
+interface VersionInfo {
+  version: string;
+  releaseDate: string;
+  size: string;
+}
+
 const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
   const [usage, setUsage] = useState<UsageStats | null>(null);
-  const [versions, setVersions] = useState<string[]>([]);
+  const [versions, setVersions] = useState<VersionInfo[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<string>('');
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
@@ -36,7 +42,7 @@ const DashboardPage: React.FC = () => {
       
       setUsage(usageData);
       setVersions(versionsData);
-      setSelectedVersion(versionsData[0] || ''); // Default to latest
+      setSelectedVersion(versionsData[0]?.version || ''); // Default to latest
     } catch (err: any) {
       console.error('Failed to load dashboard data:', err);
       setError('Failed to load usage statistics');
@@ -147,9 +153,9 @@ const DashboardPage: React.FC = () => {
                     onChange={(e) => setSelectedVersion(e.target.value)}
                     className="input-field"
                   >
-                    {versions.map((version) => (
-                      <option key={version} value={version}>
-                        {version} {version === versions[0] ? '(Latest)' : ''}
+                    {versions.map((versionInfo, index) => (
+                      <option key={versionInfo.version} value={versionInfo.version}>
+                        {versionInfo.version} {index === 0 ? '(Latest)' : ''} - {versionInfo.size}
                       </option>
                     ))}
                   </select>
