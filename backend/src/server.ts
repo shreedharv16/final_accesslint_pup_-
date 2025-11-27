@@ -110,6 +110,8 @@ function setupRoutes(app: Application): void {
 
     // Serve frontend static files from /app folder
     app.use('/app', express.static(path.join(__dirname, 'app')));
+    // Serve frontend assets directly (for absolute paths in HTML)
+    app.use('/assets', express.static(path.join(__dirname, 'app', 'assets')));
 
     // 404 handler
     app.use(notFoundHandler);
