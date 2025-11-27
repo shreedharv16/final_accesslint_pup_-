@@ -112,6 +112,15 @@ function setupRoutes(app: Application): void {
     app.use('/app', express.static(path.join(__dirname, 'app')));
     // Serve frontend assets directly (for absolute paths in HTML)
     app.use('/assets', express.static(path.join(__dirname, 'app', 'assets')));
+    
+    // SPA fallback - serve index.html for all non-API routes (for React Router)
+    app.get('*', (req, res, next) => {
+        if (!req.path.startsWith('/api')) {
+            res.sendFile(path.join(__dirname, 'app', 'index.html'));
+        } else {
+            next();
+        }
+    });
 
     // 404 handler
     app.use(notFoundHandler);
