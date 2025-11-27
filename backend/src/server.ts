@@ -109,7 +109,7 @@ function setupRoutes(app: Application): void {
     app.use(API.PREFIX, routes);
 
     // Serve frontend static files from /app folder
-    app.use('/app', express.static(path.join(__dirname, '..', 'app')));
+    app.use('/app', express.static(path.join(__dirname, 'app')));
 
     // 404 handler
     app.use(notFoundHandler);
