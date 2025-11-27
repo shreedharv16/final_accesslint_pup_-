@@ -47,7 +47,7 @@ exports.getVersions = (0, errorHandler_1.asyncHandler)(async (req, res) => {
     // For now, return a static list
     // In production, you'd list blobs from storage
     const versions = [
-        { version: '1.0.0', releaseDate: '2024-01-01', size: '200MB' }
+        { version: '0.1.0', releaseDate: '2024-11-27', size: '15MB' }
     ];
     res.status(constants_1.HTTP_STATUS.OK).json({
         data: { versions }
