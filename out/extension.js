@@ -45,9 +45,39 @@ async function activate(context) {
     // Initialize Backend API Client
     const backendApiClient = new backendApiClient_1.BackendApiClient(context);
     debugChannel.appendLine('🌐 Backend API Client initialized');
-    // Check if backend mode is enabled
-    const vsConfig = vscode.workspace.getConfiguration('accesslint');
-    const useBackendMode = vsConfig.get('useBackendMode', true);
+    // Register Login Command FIRST (before checking auth)
+    const loginCommand = vscode.commands.registerCommand('accesslint.login', async () => {
+        const email = await vscode.window.showInputBox({
+            prompt: 'Enter your email',
+            placeHolder: 'user@example.com',
+            validateInput: (value) => {
+                if (!value || !value.includes('@')) {
+                    return 'Please enter a valid email address';
+                }
+                return null;
+            }
+        });
+        if (!email) {
+            return;
+        }
+        const password = await vscode.window.showInputBox({
+            prompt: 'Enter your password',
+            password: true
+        });
+        if (!password) {
+            return;
+        }
+        try {
+            await backendApiClient.login(email, password);
+            vscode.window.showInformationMessage('✅ Logged in successfully!');
+            await vscode.commands.executeCommand('workbench.action.reloadWindow');
+        }
+        catch (error) {
+            const errorMsg = error.response?.data?.error || error.message || 'Login failed';
+            vscode.window.showErrorMessage(`❌ Login failed: ${errorMsg}`);
+        }
+    });
+    context.subscriptions.push(loginCommand);
     // Backend mode is ALWAYS enabled (no offline mode)
     debugChannel.appendLine('🔄 Backend mode enabled (required)');
     // Check authentication status
@@ -238,38 +268,6 @@ Started: ${status.startTime.toLocaleTimeString()}`;
             vscode.window.showInformationMessage(`Context truncation set to: ${choice.label}`);
         }
     });
-    // Login Command (for backend mode)
-    const loginCommand = vscode.commands.registerCommand('accesslint.login', async () => {
-        const email = await vscode.window.showInputBox({
-            prompt: 'Enter your email',
-            placeHolder: 'user@example.com',
-            validateInput: (value) => {
-                if (!value || !value.includes('@')) {
-                    return 'Please enter a valid email address';
-                }
-                return null;
-            }
-        });
-        if (!email) {
-            return;
-        }
-        const password = await vscode.window.showInputBox({
-            prompt: 'Enter your password',
-            password: true
-        });
-        if (!password) {
-            return;
-        }
-        try {
-            await backendApiClient.login(email, password);
-            vscode.window.showInformationMessage('✅ Logged in successfully!');
-            await vscode.commands.executeCommand('workbench.action.reloadWindow');
-        }
-        catch (error) {
-            const errorMsg = error.response?.data?.error || error.message || 'Login failed';
-            vscode.window.showErrorMessage(`❌ Login failed: ${errorMsg}`);
-        }
-    });
     // Logout Command (for backend mode)
     const logoutCommand = vscode.commands.registerCommand('accesslint.logout', async () => {
         const confirm = await vscode.window.showWarningMessage('Are you sure you want to logout?', 'Yes', 'No');
@@ -285,7 +283,7 @@ Started: ${status.startTime.toLocaleTimeString()}`;
         }
     });
     // Add to subscriptions for proper cleanup
-    context.subscriptions.push(configureApiKeyCommand, configureGeminiApiKeyCommand, configureAnthropicApiKeyCommand, configureOpenAIApiKeyCommand, openChatCommand, openTestingCommand, showAccessLintCommand, newChatSessionCommand, loginCommand, logoutCommand, 
+    context.subscriptions.push(configureApiKeyCommand, configureGeminiApiKeyCommand, configureAnthropicApiKeyCommand, configureOpenAIApiKeyCommand, openChatCommand, openTestingCommand, showAccessLintCommand, newChatSessionCommand, logoutCommand, 
     // LLM Agent commands
     startLLMAgentCommand, stopLLMAgentCommand, showLLMAgentStatusCommand, 
     // Token usage commands
