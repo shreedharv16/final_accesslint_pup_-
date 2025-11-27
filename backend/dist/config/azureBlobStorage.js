@@ -15,9 +15,8 @@ exports.listBlobs = listBlobs;
 const storage_blob_1 = require("@azure/storage-blob");
 const dotenv_1 = __importDefault(require("dotenv"));
 const logger_1 = __importDefault(require("../utils/logger"));
-const azureKeyVault_1 = require("./azureKeyVault");
 dotenv_1.default.config();
-const { BLOB_STORAGE_ACCOUNT = '', BLOB_CONTAINER_VSIX = 'vsix-files', BLOB_CONTAINER_REPORTS = 'test-reports', BLOB_CONTAINER_UPLOADS = 'user-uploads', NODE_ENV = 'development' } = process.env;
+const { AZURE_STORAGE_ACCOUNT_NAME = '', AZURE_STORAGE_ACCOUNT_KEY = '', AZURE_STORAGE_CONTAINER_VSIX = 'vsix', AZURE_STORAGE_CONTAINER_REPORTS = 'reports', AZURE_STORAGE_CONTAINER_UPLOADS = 'uploads', NODE_ENV = 'development' } = process.env;
 let blobServiceClient = null;
 let storageAccountKey = null;
 /**
@@ -25,15 +24,15 @@ let storageAccountKey = null;
  */
 async function initializeBlobStorage() {
     try {
-        // Get storage account key from Key Vault or environment
-        storageAccountKey = await (0, azureKeyVault_1.getSecret)('BLOB-STORAGE-KEY') || process.env.BLOB_STORAGE_KEY || '';
-        if (!storageAccountKey) {
-            throw new Error('Blob Storage key not found');
+        // Use storage account key from environment
+        storageAccountKey = AZURE_STORAGE_ACCOUNT_KEY;
+        if (!storageAccountKey || !AZURE_STORAGE_ACCOUNT_NAME) {
+            throw new Error('Blob Storage account name or key not found');
         }
-        const connectionString = `DefaultEndpointsProtocol=https;AccountName=${BLOB_STORAGE_ACCOUNT};AccountKey=${storageAccountKey};EndpointSuffix=core.windows.net`;
+        const connectionString = `DefaultEndpointsProtocol=https;AccountName=${AZURE_STORAGE_ACCOUNT_NAME};AccountKey=${storageAccountKey};EndpointSuffix=core.windows.net`;
         blobServiceClient = storage_blob_1.BlobServiceClient.fromConnectionString(connectionString);
         logger_1.default.info('✅ Azure Blob Storage client initialized');
-        logger_1.default.info(`📦 Storage Account: ${BLOB_STORAGE_ACCOUNT}`);
+        logger_1.default.info(`📦 Storage Account: ${AZURE_STORAGE_ACCOUNT_NAME}`);
     }
     catch (error) {
         logger_1.default.error('❌ Failed to initialize Azure Blob Storage:', error);
@@ -95,7 +94,7 @@ async function generateBlobSASToken(containerName, blobName, expiryMinutes = 60)
         if (!storageAccountKey) {
             throw new Error('Storage account key not available');
         }
-        const sharedKeyCredential = new storage_blob_1.StorageSharedKeyCredential(BLOB_STORAGE_ACCOUNT, storageAccountKey);
+        const sharedKeyCredential = new storage_blob_1.StorageSharedKeyCredential(AZURE_STORAGE_ACCOUNT_NAME, storageAccountKey);
         const containerClient = getContainerClient(containerName);
         const blockBlobClient = containerClient.getBlockBlobClient(blobName);
         const expiryDate = new Date();
@@ -166,9 +165,9 @@ async function listBlobs(containerName, prefix) {
 }
 // Container constants
 exports.CONTAINERS = {
-    VSIX: BLOB_CONTAINER_VSIX,
-    REPORTS: BLOB_CONTAINER_REPORTS,
-    UPLOADS: BLOB_CONTAINER_UPLOADS
+    VSIX: AZURE_STORAGE_CONTAINER_VSIX,
+    REPORTS: AZURE_STORAGE_CONTAINER_REPORTS,
+    UPLOADS: AZURE_STORAGE_CONTAINER_UPLOADS
 };
 exports.default = {
     initializeBlobStorage,

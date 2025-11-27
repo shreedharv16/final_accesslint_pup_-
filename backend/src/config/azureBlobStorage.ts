@@ -6,10 +6,11 @@ import { getSecret } from './azureKeyVault';
 dotenv.config();
 
 const {
-    BLOB_STORAGE_ACCOUNT = '',
-    BLOB_CONTAINER_VSIX = 'vsix-files',
-    BLOB_CONTAINER_REPORTS = 'test-reports',
-    BLOB_CONTAINER_UPLOADS = 'user-uploads',
+    AZURE_STORAGE_ACCOUNT_NAME = '',
+    AZURE_STORAGE_ACCOUNT_KEY = '',
+    AZURE_STORAGE_CONTAINER_VSIX = 'vsix',
+    AZURE_STORAGE_CONTAINER_REPORTS = 'reports',
+    AZURE_STORAGE_CONTAINER_UPLOADS = 'uploads',
     NODE_ENV = 'development'
 } = process.env;
 
@@ -21,19 +22,19 @@ let storageAccountKey: string | null = null;
  */
 export async function initializeBlobStorage(): Promise<void> {
     try {
-        // Get storage account key from Key Vault or environment
-        storageAccountKey = await getSecret('BLOB-STORAGE-KEY') || process.env.BLOB_STORAGE_KEY || '';
+        // Use storage account key from environment
+        storageAccountKey = AZURE_STORAGE_ACCOUNT_KEY;
 
-        if (!storageAccountKey) {
-            throw new Error('Blob Storage key not found');
+        if (!storageAccountKey || !AZURE_STORAGE_ACCOUNT_NAME) {
+            throw new Error('Blob Storage account name or key not found');
         }
 
-        const connectionString = `DefaultEndpointsProtocol=https;AccountName=${BLOB_STORAGE_ACCOUNT};AccountKey=${storageAccountKey};EndpointSuffix=core.windows.net`;
+        const connectionString = `DefaultEndpointsProtocol=https;AccountName=${AZURE_STORAGE_ACCOUNT_NAME};AccountKey=${storageAccountKey};EndpointSuffix=core.windows.net`;
         
         blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
 
         logger.info('✅ Azure Blob Storage client initialized');
-        logger.info(`📦 Storage Account: ${BLOB_STORAGE_ACCOUNT}`);
+        logger.info(`📦 Storage Account: ${AZURE_STORAGE_ACCOUNT_NAME}`);
     } catch (error) {
         logger.error('❌ Failed to initialize Azure Blob Storage:', error);
         throw error;
@@ -114,7 +115,7 @@ export async function generateBlobSASToken(
         }
 
         const sharedKeyCredential = new StorageSharedKeyCredential(
-            BLOB_STORAGE_ACCOUNT,
+            AZURE_STORAGE_ACCOUNT_NAME,
             storageAccountKey
         );
 
@@ -199,9 +200,9 @@ export async function listBlobs(containerName: string, prefix?: string): Promise
 
 // Container constants
 export const CONTAINERS = {
-    VSIX: BLOB_CONTAINER_VSIX,
-    REPORTS: BLOB_CONTAINER_REPORTS,
-    UPLOADS: BLOB_CONTAINER_UPLOADS
+    VSIX: AZURE_STORAGE_CONTAINER_VSIX,
+    REPORTS: AZURE_STORAGE_CONTAINER_REPORTS,
+    UPLOADS: AZURE_STORAGE_CONTAINER_UPLOADS
 };
 
 export default {
