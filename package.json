@@ -216,11 +216,6 @@
           "type": "string",
           "default": "https://ctonpsiotspocapp-gcfhduh3fdhab4h2.southindia-01.azurewebsites.net",
           "description": "Web application URL for login and registration"
-        },
-        "accesslint.useBackendMode": {
-          "type": "boolean",
-          "default": true,
-          "description": "Use backend server for AI processing and data storage"
         }
       }
     }

@@ -82,6 +82,20 @@ class ChatWebviewProvider {
         if (!this._view) {
             return;
         }
+        // Check authentication first (backend mode is always required)
+        if (!this.backendApiClient.isAuthenticated()) {
+            this._view.webview.postMessage({
+                type: 'error',
+                message: '🔒 Please login to use AccessLint. Use command: "AccessLint: Login"',
+                timestamp: new Date()
+            });
+            vscode.window.showWarningMessage('AccessLint: You must be logged in to use this feature.', 'Login Now').then(async (choice) => {
+                if (choice === 'Login Now') {
+                    await vscode.commands.executeCommand('accesslint.login');
+                }
+            });
+            return;
+        }
         try {
             // Send user message to chat immediately
             this._view.webview.postMessage({
@@ -96,21 +110,16 @@ class ChatWebviewProvider {
                 timestamp: new Date(),
                 isLoading: true
             });
-            // Log to backend if authenticated
-            const vsConfig = vscode.workspace.getConfiguration('accesslint');
-            const useBackendMode = vsConfig.get('useBackendMode', true);
-            if (useBackendMode && this.backendApiClient.isAuthenticated()) {
-                try {
-                    // Create conversation if not exists
-                    if (!this.currentConversationId) {
-                        const conversation = await this.backendApiClient.createChatConversation(mode === 'agent' ? 'agent' : 'chat', `Chat - ${new Date().toLocaleString()}`);
-                        this.currentConversationId = conversation.id;
-                    }
+            // Create conversation if not exists (always use backend)
+            try {
+                if (!this.currentConversationId) {
+                    const conversation = await this.backendApiClient.createChatConversation(mode === 'agent' ? 'agent' : 'chat', `Chat - ${new Date().toLocaleString()}`);
+                    this.currentConversationId = conversation.id;
                 }
-                catch (error) {
-                    console.error('Failed to create conversation:', error);
-                    // Continue with offline mode
-                }
+            }
+            catch (error) {
+                console.error('Failed to create conversation:', error);
+                throw new Error('Failed to initialize chat session. Please check your connection.');
             }
             if (mode === 'agent') {
                 // For agent mode, trigger the LLM Agent Orchestrator
@@ -153,28 +162,18 @@ class ChatWebviewProvider {
                     fullMessage = `${userMessage}${fileContext}`;
                     console.log(`📦 Full message with context: ${fullMessage.length} characters`);
                 }
+                // Always use backend API (no offline mode)
                 let responseText;
-                // Use backend API if authenticated, otherwise fallback to local
-                if (useBackendMode && this.backendApiClient.isAuthenticated()) {
-                    try {
-                        // Call backend API for AI response
-                        const backendResponse = await this.backendApiClient.sendChatMessageWithResponse(this.currentConversationId || null, fullMessage, 'quick_mode');
-                        responseText = backendResponse.response;
-                        this.currentConversationId = backendResponse.conversationId;
-                        console.log(`✅ Backend response received (${backendResponse.tokensUsed} tokens)`);
-                    }
-                    catch (error) {
-                        console.error('❌ Backend call failed, falling back to local AI:', error);
-                        // Fallback to local AI provider
-                        const response = await this.aiProviderManager.sendMessage(fullMessage, provider);
-                        responseText = response.text || 'No response';
-                    }
+                try {
+                    // Call backend API for AI response
+                    const backendResponse = await this.backendApiClient.sendChatMessageWithResponse(this.currentConversationId || null, fullMessage, 'quick_mode');
+                    responseText = backendResponse.response;
+                    this.currentConversationId = backendResponse.conversationId;
+                    console.log(`✅ Backend response received (${backendResponse.tokensUsed} tokens)`);
                 }
-                else {
-                    // Use local AI provider
-                    const response = await this.aiProviderManager.sendMessage(fullMessage, provider);
-                    responseText = response.text || 'No response';
-                    console.log(`✅ Local AI response received: ${responseText.substring(0, 100)}...`);
+                catch (error) {
+                    console.error('❌ Backend call failed:', error);
+                    throw new Error(`Failed to get AI response: ${error instanceof Error ? error.message : 'Unknown error'}`);
                 }
                 // Send AI response to webview
                 this._view.webview.postMessage({
@@ -421,6 +420,33 @@ class ChatWebviewProvider {
             gap: 4px;
         }
         
+        .login-status {
+            padding: 8px 12px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        
+        .login-status.authenticated {
+            background-color: #1a472a;
+            border: 1px solid #2ea043;
+            color: #3fb950;
+        }
+        
+        .login-status.not-authenticated {
+            background-color: #4a1e1e;
+            border: 1px solid #da3633;
+            color: #ff7b72;
+        }
+        
+        .login-status-text {
+            flex: 1;
+        }
+        
         .chat-container {
             flex: 1;
             overflow-y: auto;
@@ -620,6 +646,13 @@ class ChatWebviewProvider {
             <div class="ai-badge">🤖 GPT-5</div>
             </div>
           </div>
+
+    <!-- Login Status Bar -->
+    <div class="login-status ${this.backendApiClient.isAuthenticated() ? 'authenticated' : 'not-authenticated'}" id="loginStatus">
+        <span class="login-status-text" id="loginStatusText">
+            ${this.backendApiClient.isAuthenticated() ? '✅ Logged in and connected to backend' : '🔒 Not logged in - Please login to use features'}
+        </span>
+    </div>
 
     <!-- Chat Container -->
     <div class="chat-container" id="chatContainer">

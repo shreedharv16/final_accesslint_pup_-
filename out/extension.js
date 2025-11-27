@@ -48,47 +48,42 @@ async function activate(context) {
     // Check if backend mode is enabled
     const vsConfig = vscode.workspace.getConfiguration('accesslint');
     const useBackendMode = vsConfig.get('useBackendMode', true);
-    if (useBackendMode) {
-        debugChannel.appendLine('🔄 Backend mode enabled');
-        // Check authentication status
-        if (!backendApiClient.isAuthenticated()) {
-            debugChannel.appendLine('⚠️ User not authenticated');
-            const result = await vscode.window.showWarningMessage('AccessLint: Please login to use the extension', 'Login', 'Use Offline Mode');
-            if (result === 'Login') {
-                const webAppUrl = vsConfig.get('webAppUrl', 'http://localhost:3001');
-                await vscode.env.openExternal(vscode.Uri.parse(`${webAppUrl}/login`));
-                vscode.window.showInformationMessage('After logging in and downloading the VSIX, please reload the window.', 'Reload Window').then(selection => {
-                    if (selection === 'Reload Window') {
-                        vscode.commands.executeCommand('workbench.action.reloadWindow');
-                    }
-                });
-                return; // Don't continue activation until authenticated
-            }
-            else {
-                // User chose offline mode
-                await vsConfig.update('useBackendMode', false, vscode.ConfigurationTarget.Global);
-                debugChannel.appendLine('📴 Switched to offline mode');
-            }
+    // Backend mode is ALWAYS enabled (no offline mode)
+    debugChannel.appendLine('🔄 Backend mode enabled (required)');
+    // Check authentication status
+    if (!backendApiClient.isAuthenticated()) {
+        debugChannel.appendLine('⚠️ User not authenticated - prompting login');
+        // Show login prompt immediately
+        const result = await vscode.window.showWarningMessage('🔒 AccessLint requires login to function. Please sign in to continue.', 'Login Now');
+        if (result === 'Login Now') {
+            // Trigger login command
+            await vscode.commands.executeCommand('accesslint.login');
         }
-        else {
-            debugChannel.appendLine('✅ User authenticated');
-            // Show authenticated user info in status bar
-            try {
-                const user = await backendApiClient.getCurrentUser();
-                const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-                statusBar.text = `$(account) ${user.email}`;
-                statusBar.tooltip = 'AccessLint - Logged in';
-                statusBar.show();
-                context.subscriptions.push(statusBar);
-                debugChannel.appendLine(`👤 Logged in as: ${user.email}`);
-            }
-            catch (error) {
-                debugChannel.appendLine(`⚠️ Failed to fetch user info: ${error}`);
-            }
-        }
+        debugChannel.appendLine('⚠️ Extension loaded but features disabled until authenticated');
     }
     else {
-        debugChannel.appendLine('📴 Using offline mode');
+        debugChannel.appendLine('✅ User authenticated');
+        // Show authenticated user info in status bar
+        try {
+            const user = await backendApiClient.getCurrentUser();
+            const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+            statusBar.text = `✅ AccessLint: ${user.email}`;
+            statusBar.tooltip = `Logged in as ${user.email}\nClick to logout`;
+            statusBar.command = 'accesslint.logout';
+            statusBar.show();
+            context.subscriptions.push(statusBar);
+            debugChannel.appendLine(`👤 Logged in as: ${user.email}`);
+        }
+        catch (error) {
+            debugChannel.appendLine(`⚠️ Failed to fetch user info: ${error}`);
+            // Token might be invalid, prompt to login again
+            vscode.window.showErrorMessage('AccessLint: Session expired. Please login again.', 'Login').then(async (choice) => {
+                if (choice === 'Login') {
+                    await backendApiClient.clearTokens();
+                    await vscode.commands.executeCommand('accesslint.login');
+                }
+            });
+        }
     }
     // Initialize API Key Manager
     const apiKeyManager = new apiKeyManager_1.ApiKeyManager(context);
