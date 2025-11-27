@@ -2,6 +2,7 @@ import 'reflect-metadata'
 import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import dotenv from 'dotenv';
 import logger from './utils/logger';
 import sequelize, { testConnection } from './config/database';
@@ -106,6 +107,9 @@ function setupMiddleware(app: Application): void {
 function setupRoutes(app: Application): void {
     // API routes
     app.use(API.PREFIX, routes);
+
+    // Serve frontend static files from /app folder
+    app.use('/app', express.static(path.join(__dirname, '..', 'app')));
 
     // 404 handler
     app.use(notFoundHandler);
