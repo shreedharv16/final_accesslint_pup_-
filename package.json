@@ -3,6 +3,7 @@
   "displayName": "AccessLint - Accessibility AI Code Agent",
   "description": "An accessibility-first AI code agent that scans repositories and provides intelligent accessibility improvements",
   "version": "0.1.0",
+  "publisher": "internal-corp",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -233,7 +234,7 @@
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
     "@vscode/test-electron": "^2.2.0",
-    "@vscode/vsce": "^2.15.0",
+    "@vscode/vsce": "^2.32.0",
     "eslint": "^8.28.0",
     "typescript": "^4.9.4"
   },

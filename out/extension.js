@@ -34,6 +34,7 @@ const geminiChat_1 = require("./geminiChat");
 const anthropicChat_1 = require("./anthropicChat");
 const openaiChat_1 = require("./openaiChat");
 const aiProviderManager_1 = require("./aiProviderManager");
+const backendApiClient_1 = require("./services/backendApiClient");
 async function activate(context) {
     console.log('🚀 AccessLint extension is now active!');
     // Create debug output channel
@@ -41,6 +42,54 @@ async function activate(context) {
     debugChannel.appendLine('🔍 AccessLint Debug Channel Activated');
     debugChannel.appendLine('💡 To see these logs: View > Output > Select "AccessLint Debug" from dropdown');
     debugChannel.show(); // Show the debug channel immediately
+    // Initialize Backend API Client
+    const backendApiClient = new backendApiClient_1.BackendApiClient(context);
+    debugChannel.appendLine('🌐 Backend API Client initialized');
+    // Check if backend mode is enabled
+    const vsConfig = vscode.workspace.getConfiguration('accesslint');
+    const useBackendMode = vsConfig.get('useBackendMode', true);
+    if (useBackendMode) {
+        debugChannel.appendLine('🔄 Backend mode enabled');
+        // Check authentication status
+        if (!backendApiClient.isAuthenticated()) {
+            debugChannel.appendLine('⚠️ User not authenticated');
+            const result = await vscode.window.showWarningMessage('AccessLint: Please login to use the extension', 'Login', 'Use Offline Mode');
+            if (result === 'Login') {
+                const webAppUrl = vsConfig.get('webAppUrl', 'http://localhost:3001');
+                await vscode.env.openExternal(vscode.Uri.parse(`${webAppUrl}/login`));
+                vscode.window.showInformationMessage('After logging in and downloading the VSIX, please reload the window.', 'Reload Window').then(selection => {
+                    if (selection === 'Reload Window') {
+                        vscode.commands.executeCommand('workbench.action.reloadWindow');
+                    }
+                });
+                return; // Don't continue activation until authenticated
+            }
+            else {
+                // User chose offline mode
+                await vsConfig.update('useBackendMode', false, vscode.ConfigurationTarget.Global);
+                debugChannel.appendLine('📴 Switched to offline mode');
+            }
+        }
+        else {
+            debugChannel.appendLine('✅ User authenticated');
+            // Show authenticated user info in status bar
+            try {
+                const user = await backendApiClient.getCurrentUser();
+                const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+                statusBar.text = `$(account) ${user.email}`;
+                statusBar.tooltip = 'AccessLint - Logged in';
+                statusBar.show();
+                context.subscriptions.push(statusBar);
+                debugChannel.appendLine(`👤 Logged in as: ${user.email}`);
+            }
+            catch (error) {
+                debugChannel.appendLine(`⚠️ Failed to fetch user info: ${error}`);
+            }
+        }
+    }
+    else {
+        debugChannel.appendLine('📴 Using offline mode');
+    }
     // Initialize API Key Manager
     const apiKeyManager = new apiKeyManager_1.ApiKeyManager(context);
     // Initialize AI Providers
@@ -66,7 +115,7 @@ async function activate(context) {
     // Create AI Provider Manager with the primary provider (Gemini by default)
     const aiProviderManager = new aiProviderManager_1.AiProviderManager(context, geminiChatProvider);
     // Initialize Chat WebView Provider
-    const chatProvider = new chatWebviewProvider_1.ChatWebviewProvider(context.extensionUri, context, aiProviderManager);
+    const chatProvider = new chatWebviewProvider_1.ChatWebviewProvider(context.extensionUri, context, aiProviderManager, backendApiClient);
     // Set up AI Provider Manager with webview
     aiProviderManager.setWebviewProvider(chatProvider);
     // Initialize DiffViewerManager
@@ -74,11 +123,11 @@ async function activate(context) {
     const { DiffViewerManager } = await Promise.resolve().then(() => __importStar(require('./diffViewer/DiffViewerManager')));
     DiffViewerManager.getInstance(context, workspaceRoot);
     // Initialize LLM Agent Orchestrator for CHAT interface (original, untouched)
-    const llmAgentOrchestrator = new agentLLMOrchestrator_1.AgentLLMOrchestrator(aiProviderManager, aiProviderManager.getToolManager());
+    const llmAgentOrchestrator = new agentLLMOrchestrator_1.AgentLLMOrchestrator(aiProviderManager, aiProviderManager.getToolManager(), backendApiClient);
     // Initialize TESTING Agent Orchestrator (specialized for testing menu with crash fixes)
-    const testingAgentOrchestrator = new testingAgentOrchestrator_1.TestingAgentOrchestrator(aiProviderManager, aiProviderManager.getToolManager());
+    const testingAgentOrchestrator = new testingAgentOrchestrator_1.TestingAgentOrchestrator(aiProviderManager, aiProviderManager.getToolManager(), backendApiClient);
     // Initialize Testing WebView Provider with specialized testing orchestrator
-    const testingProvider = new testingWebviewProvider_1.TestingWebviewProvider(context.extensionUri, context, testingAgentOrchestrator);
+    const testingProvider = new testingWebviewProvider_1.TestingWebviewProvider(context.extensionUri, context, testingAgentOrchestrator, backendApiClient);
     // Register webview providers
     context.subscriptions.push(vscode.window.registerWebviewViewProvider('accesslint.chatView', chatProvider), vscode.window.registerWebviewViewProvider('accesslint.testingView', testingProvider));
     // Register Commands
@@ -194,12 +243,28 @@ Started: ${status.startTime.toLocaleTimeString()}`;
             vscode.window.showInformationMessage(`Context truncation set to: ${choice.label}`);
         }
     });
+    // Logout Command (for backend mode)
+    const logoutCommand = vscode.commands.registerCommand('accesslint.logout', async () => {
+        const confirm = await vscode.window.showWarningMessage('Are you sure you want to logout?', 'Yes', 'No');
+        if (confirm === 'Yes') {
+            try {
+                await backendApiClient.logout();
+                vscode.window.showInformationMessage('✅ Logged out successfully. Please reload the window.');
+                await vscode.commands.executeCommand('workbench.action.reloadWindow');
+            }
+            catch (error) {
+                vscode.window.showErrorMessage(`Failed to logout: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
+    });
     // Add to subscriptions for proper cleanup
     context.subscriptions.push(configureApiKeyCommand, configureGeminiApiKeyCommand, configureAnthropicApiKeyCommand, configureOpenAIApiKeyCommand, openChatCommand, openTestingCommand, showAccessLintCommand, newChatSessionCommand, 
     // LLM Agent commands
     startLLMAgentCommand, stopLLMAgentCommand, showLLMAgentStatusCommand, 
     // Token usage commands
-    showTokenStatsCommand, configureContextTruncationCommand, chatProvider, testingProvider, geminiChatProvider, anthropicChatProvider, llmAgentOrchestrator, debugChannel);
+    showTokenStatsCommand, configureContextTruncationCommand, 
+    // Backend commands
+    logoutCommand, chatProvider, testingProvider, geminiChatProvider, anthropicChatProvider, llmAgentOrchestrator, debugChannel);
     // Status bar item
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.text = "$(accessibility) AccessLint";

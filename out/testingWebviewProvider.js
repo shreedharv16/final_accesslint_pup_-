@@ -30,13 +30,14 @@ const fs = __importStar(require("fs"));
 const accessibilityTester_1 = require("./accessibilityTester");
 const accessibilityPatterns_1 = require("./accessibilityPatterns");
 class TestingWebviewProvider {
-    constructor(_extensionUri, context, agentOrchestrator) {
+    constructor(_extensionUri, context, agentOrchestrator, backendApiClient) {
         this._extensionUri = _extensionUri;
         this.context = context;
         this.tester = null;
         this.agentOrchestrator = null;
         this.outputChannel = vscode.window.createOutputChannel('AccessLint Testing');
         this.agentOrchestrator = agentOrchestrator || null;
+        this.backendApiClient = backendApiClient;
     }
     setAgentOrchestrator(orchestrator) {
         this.agentOrchestrator = orchestrator;
@@ -84,6 +85,20 @@ class TestingWebviewProvider {
             this.outputChannel.appendLine('='.repeat(80));
             this.outputChannel.appendLine(`🧪 Starting Accessibility Test for: ${url}`);
             this.outputChannel.appendLine('='.repeat(80));
+            // Create testing session in backend if in backend mode
+            const vsConfig = vscode.workspace.getConfiguration('accesslint');
+            const useBackendMode = vsConfig.get('useBackendMode', true);
+            if (useBackendMode && this.backendApiClient.isAuthenticated()) {
+                try {
+                    const session = await this.backendApiClient.startTestingSession(url);
+                    this.currentTestingSessionId = session.id;
+                    this.outputChannel.appendLine(`✅ Testing session created: ${session.id}`);
+                }
+                catch (error) {
+                    this.outputChannel.appendLine(`⚠️ Failed to create testing session: ${error}`);
+                    // Continue with offline mode
+                }
+            }
             // Initialize tester with AI provider for comprehensive validation
             const aiProvider = this.agentOrchestrator ? this.agentOrchestrator.aiProviderManager : null;
             this.tester = new accessibilityTester_1.AccessibilityTester(this.outputChannel, aiProvider);
@@ -100,6 +115,18 @@ class TestingWebviewProvider {
             // Close the browser
             await this.tester.close();
             this.tester = null;
+            // Save results to backend if in backend mode
+            if (useBackendMode && this.backendApiClient.isAuthenticated() && this.currentTestingSessionId) {
+                try {
+                    const nvdaLog = result.interactions.map((i) => `[${i.action}] ${i.announcement}`).join('\n');
+                    await this.backendApiClient.saveTestingResults(this.currentTestingSessionId, nvdaLog, result, undefined // AI validation results if applicable
+                    );
+                    this.outputChannel.appendLine(`✅ Results saved to backend`);
+                }
+                catch (error) {
+                    this.outputChannel.appendLine(`⚠️ Failed to save results to backend: ${error}`);
+                }
+            }
             // Send results to webview
             this._view.webview.postMessage({
                 type: 'testingComplete',
@@ -149,45 +176,40 @@ class TestingWebviewProvider {
             return;
         }
         try {
-            // Ask user which provider to use
-            const providerChoice = await vscode.window.showQuickPick([
-                { label: 'Azure OpenAI (GPT)', value: 'openai', description: 'Uses Azure OpenAI GPT model' },
-                { label: 'Anthropic (Claude)', value: 'anthropic', description: 'Uses Claude Sonnet' },
-                { label: 'Gemini', value: 'gemini', description: 'Uses Google Gemini' }
-            ], {
-                placeHolder: 'Select AI provider to fix accessibility issues',
-                title: '🔧 Choose AI Provider for Fixing'
-            });
-            if (!providerChoice) {
-                // User cancelled
-                if (this._view) {
-                    this._view.webview.postMessage({
-                        type: 'fixingError',
-                        error: 'Provider selection cancelled'
-                    });
-                }
-                return;
-            }
+            // Using hardcoded GPT-5 provider
+            const providerValue = 'openai';
             // Send fixing started message
             this._view.webview.postMessage({
                 type: 'fixingStarted'
             });
             this.outputChannel.appendLine('='.repeat(80));
             this.outputChannel.appendLine(`🔧 Starting Automated Accessibility Fixes`);
-            this.outputChannel.appendLine(`🤖 Using provider: ${providerChoice.label}`);
+            this.outputChannel.appendLine(`🤖 Using AI Model: GPT-5 (Azure OpenAI)`);
             this.outputChannel.appendLine('='.repeat(80));
             // Pre-explore workspace to find relevant files
             this.outputChannel.appendLine('🔍 Pre-analyzing workspace structure...');
             const workspaceInfo = await this._exploreWorkspace(testResult.url);
             // Convert test results to agent prompt with workspace context
             const fixPrompt = this._createEnhancedFixPrompt(testResult, workspaceInfo);
-            // Start agent session with the fix prompt using selected provider
-            const sessionId = await this.agentOrchestrator.startSession(fixPrompt, providerChoice.value);
+            // Start agent session with the fix prompt using GPT-5
+            const sessionId = await this.agentOrchestrator.startSession(fixPrompt, providerValue);
             // CRITICAL: Store session start time for timeout detection
             const sessionStartTime = Date.now();
             // Wait for agent to complete (poll session status with hard limits)
             const completionDetails = await this._waitForAgentCompletion(sessionId, sessionStartTime);
             if (completionDetails.success) {
+                // Save fix results to backend if in backend mode
+                const vsConfig = vscode.workspace.getConfiguration('accesslint');
+                const useBackendMode = vsConfig.get('useBackendMode', true);
+                if (useBackendMode && this.backendApiClient.isAuthenticated() && this.currentTestingSessionId) {
+                    try {
+                        await this.backendApiClient.saveTestingFix(this.currentTestingSessionId, sessionId, completionDetails.filesChanged || [], completionDetails.summary || 'Accessibility issues fixed', true);
+                        this.outputChannel.appendLine(`✅ Fix results saved to backend`);
+                    }
+                    catch (error) {
+                        this.outputChannel.appendLine(`⚠️ Failed to save fix results: ${error}`);
+                    }
+                }
                 // Send detailed completion message
                 this._view.webview.postMessage({
                     type: 'fixingComplete',

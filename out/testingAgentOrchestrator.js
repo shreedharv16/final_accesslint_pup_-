@@ -35,7 +35,7 @@ const fileContextTracker_1 = require("./fileContextTracker");
  * The original AgentLLMOrchestrator remains untouched for the chat interface.
  */
 class TestingAgentOrchestrator {
-    constructor(aiProviderManager, toolManager) {
+    constructor(aiProviderManager, toolManager, backendApiClient) {
         this.currentSession = null;
         // Loop detection and state management
         this.recentToolCalls = new Map();
@@ -46,6 +46,7 @@ class TestingAgentOrchestrator {
         this.RAPID_CALL_WINDOW = 60000; // 60 seconds for rapid call detection (increased from 30)
         this.aiProviderManager = aiProviderManager;
         this.toolManager = toolManager;
+        this.backendApiClient = backendApiClient;
         this.todoListManager = new todoListManager_1.TodoListManager(aiProviderManager);
         this.outputChannel = vscode.window.createOutputChannel('AccessLint Testing Agent');
         // Initialize file context tracker
@@ -91,6 +92,20 @@ class TestingAgentOrchestrator {
         this.clearLoopDetection();
         // CRITICAL FIX: Clear all provider conversation histories for new agent session
         await this.aiProviderManager.startNewSessions();
+        // Create session in backend if in backend mode
+        const vsConfig = vscode.workspace.getConfiguration('accesslint');
+        const useBackendMode = vsConfig.get('useBackendMode', true);
+        if (useBackendMode && this.backendApiClient.isAuthenticated()) {
+            try {
+                const backendSession = await this.backendApiClient.startAgentSession(goal, 'testing');
+                this.backendSessionId = backendSession.id;
+                this.outputChannel.appendLine(`✅ Backend session created: ${backendSession.id}`);
+            }
+            catch (error) {
+                this.outputChannel.appendLine(`⚠️ Failed to create backend session: ${error}`);
+                // Continue with offline mode
+            }
+        }
         this.config.provider = provider;
         this.outputChannel.appendLine(`🤖 Agent Session Started: ${goal}`);
         this.outputChannel.appendLine(`🔧 Using provider: ${provider}`);
