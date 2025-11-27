@@ -9,7 +9,6 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/npm-debug.log
-node_modules/**
 .nyc_output/**
 coverage/**
 **/.DS_Store
@@ -23,4 +22,11 @@ PRD.txt
 test/**
 .env
 .env.*
-!icons/** 
+!icons/**
+backend/**
+frontend/**
+.gitlab-ci.yml
+node_modules/**/test/**
+node_modules/**/*.md
+node_modules/**/*.txt
+node_modules/**/.bin/** 

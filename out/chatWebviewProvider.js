@@ -367,7 +367,7 @@ class ChatWebviewProvider {
         .logo {
             width: 24px;
             height: 24px;
-            filter: brightness(0) invert(1);
+            opacity: 0.9;
         }
         
         .title {
@@ -635,7 +635,7 @@ class ChatWebviewProvider {
     <!-- Header with Logo and Controls -->
           <div class="header">
         <div class="logo-section">
-            <img src="${iconPath}" alt="AccessLint" class="logo">
+            <div style="font-size: 24px;">♿</div>
             <div class="title">AccessLint</div>
             </div>
         <div class="controls-section">
