@@ -174,6 +174,17 @@ class BackendApiClient {
         return response.data.data;
     }
     /**
+     * Send chat message and get AI response
+     */
+    async sendChatMessageWithResponse(conversationId, message, mode = 'quick_mode') {
+        const response = await this.axiosInstance.post('/chat/message', {
+            conversationId,
+            message,
+            mode
+        });
+        return response.data.data;
+    }
+    /**
      * Get conversation messages
      */
     async getChatMessages(conversationId) {

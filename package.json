@@ -103,6 +103,12 @@
         "icon": "$(beaker)"
       },
       {
+        "command": "accesslint.login",
+        "title": "Login",
+        "category": "AccessLint",
+        "icon": "$(sign-in)"
+      },
+      {
         "command": "accesslint.logout",
         "title": "Logout",
         "category": "AccessLint",
@@ -203,12 +209,12 @@
         },
         "accesslint.backendApiUrl": {
           "type": "string",
-          "default": "http://localhost:3000/api",
+          "default": "https://ctonpsiotspocapp-gcfhduh3fdhab4h2.southindia-01.azurewebsites.net/api",
           "description": "Backend API URL for AccessLint server"
         },
         "accesslint.webAppUrl": {
           "type": "string",
-          "default": "http://localhost:3001",
+          "default": "https://ctonpsiotspocapp-gcfhduh3fdhab4h2.southindia-01.azurewebsites.net",
           "description": "Web application URL for login and registration"
         },
         "accesslint.useBackendMode": {

@@ -118,7 +118,7 @@ class ChatWebviewProvider {
                 vscode.commands.executeCommand('accesslint.startLLMAgent', userMessage, provider);
             }
             else {
-                // Quick mode - direct chat using AiProviderManager
+                // Quick mode - use backend or local AI provider
                 console.log(`🔍 ChatWebview: Sending message to ${provider} in quick mode`);
                 console.log(`📝 Message: ${userMessage}`);
                 console.log(`📁 Processing ${contextFiles.length} context files`);
@@ -153,22 +153,33 @@ class ChatWebviewProvider {
                     fullMessage = `${userMessage}${fileContext}`;
                     console.log(`📦 Full message with context: ${fullMessage.length} characters`);
                 }
-                const response = await this.aiProviderManager.sendMessage(fullMessage, provider);
-                console.log(`✅ Response received: ${response.text?.substring(0, 100)}...`);
-                // Log to backend if in backend mode
-                if (useBackendMode && this.backendApiClient.isAuthenticated() && this.currentConversationId) {
+                let responseText;
+                // Use backend API if authenticated, otherwise fallback to local
+                if (useBackendMode && this.backendApiClient.isAuthenticated()) {
                     try {
-                        await this.backendApiClient.sendChatMessage(this.currentConversationId, fullMessage);
+                        // Call backend API for AI response
+                        const backendResponse = await this.backendApiClient.sendChatMessageWithResponse(this.currentConversationId || null, fullMessage, 'quick_mode');
+                        responseText = backendResponse.response;
+                        this.currentConversationId = backendResponse.conversationId;
+                        console.log(`✅ Backend response received (${backendResponse.tokensUsed} tokens)`);
                     }
                     catch (error) {
-                        console.error('Failed to log chat message to backend:', error);
-                        // Continue with offline mode
+                        console.error('❌ Backend call failed, falling back to local AI:', error);
+                        // Fallback to local AI provider
+                        const response = await this.aiProviderManager.sendMessage(fullMessage, provider);
+                        responseText = response.text || 'No response';
                     }
                 }
-                // Send AI response
+                else {
+                    // Use local AI provider
+                    const response = await this.aiProviderManager.sendMessage(fullMessage, provider);
+                    responseText = response.text || 'No response';
+                    console.log(`✅ Local AI response received: ${responseText.substring(0, 100)}...`);
+                }
+                // Send AI response to webview
                 this._view.webview.postMessage({
                     type: 'aiResponse',
-                    message: response.text,
+                    message: responseText,
                     timestamp: new Date()
                 });
             }
