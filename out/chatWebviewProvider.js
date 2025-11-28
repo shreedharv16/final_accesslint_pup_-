@@ -698,14 +698,13 @@ class ChatWebviewProvider {
         const quickModeBtn = document.getElementById('quickMode');
         const agentModeBtn = document.getElementById('agentMode');
         const configButton = document.getElementById('configButton');
-        const providerSelect = document.getElementById('providerSelect');
         const contextButton = document.getElementById('contextButton');
         const contextContainer = document.getElementById('contextContainer');
         const contextFiles = document.getElementById('contextFiles');
         const clearContextButton = document.getElementById('clearContextButton');
         
         let currentMode = 'quick';
-        let currentProvider = 'gemini';
+        let currentProvider = 'openai'; // Always use GPT-5 via backend
         let selectedFiles = [];
 
         function addMessage(content, type, timestamp, isLoading = false) {
@@ -868,7 +867,7 @@ class ChatWebviewProvider {
             });
         });
         
-        providerSelect.addEventListener('change', (e) => setProvider(e.target.value));
+        // Provider is always GPT-5 via backend (no selection needed)
         
         messageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
