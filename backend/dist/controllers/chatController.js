@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMessages = exports.getConversations = exports.sendMessage = void 0;
+exports.getMessages = exports.sendMessageToConversation = exports.getConversations = exports.createConv = exports.sendMessage = void 0;
 const aiService_1 = require("../services/aiService");
 const constants_1 = require("../config/constants");
 const errorHandler_1 = require("../middleware/errorHandler");
@@ -44,6 +44,19 @@ exports.sendMessage = (0, errorHandler_1.asyncHandler)(async (req, res) => {
     });
 });
 /**
+ * Create a new conversation
+ * POST /api/chat/conversations
+ * Body: { type: 'chat' | 'agent', title?: string }
+ */
+exports.createConv = (0, errorHandler_1.asyncHandler)(async (req, res) => {
+    const userId = req.user.id;
+    const { type = 'chat', title } = req.body;
+    const conversation = await (0, aiService_1.createConversation)(userId, type === 'agent' ? 'agent_mode' : 'quick_mode');
+    res.status(constants_1.HTTP_STATUS.OK).json({
+        data: conversation
+    });
+});
+/**
  * Get user conversations
  * GET /api/chat/conversations
  */
@@ -54,6 +67,30 @@ exports.getConversations = (0, errorHandler_1.asyncHandler)(async (req, res) => 
     const conversations = await (0, aiService_1.getUserConversations)(userId, { limit, offset });
     res.status(constants_1.HTTP_STATUS.OK).json({
         data: { conversations }
+    });
+});
+/**
+ * Send message to a conversation
+ * POST /api/chat/conversations/:id/messages
+ * Body: { content: string }
+ */
+exports.sendMessageToConversation = (0, errorHandler_1.asyncHandler)(async (req, res) => {
+    const { id } = req.params;
+    const { content } = req.body;
+    const userId = req.user.id;
+    if (!content) {
+        res.status(constants_1.HTTP_STATUS.BAD_REQUEST).json({
+            error: 'Message content is required'
+        });
+        return;
+    }
+    // Save user message
+    await (0, aiService_1.saveMessage)(id, 'user', content);
+    res.status(constants_1.HTTP_STATUS.OK).json({
+        data: {
+            message: 'Message saved',
+            conversationId: id
+        }
     });
 });
 /**
@@ -70,7 +107,9 @@ exports.getMessages = (0, errorHandler_1.asyncHandler)(async (req, res) => {
 });
 exports.default = {
     sendMessage: exports.sendMessage,
+    createConv: exports.createConv,
     getConversations: exports.getConversations,
+    sendMessageToConversation: exports.sendMessageToConversation,
     getMessages: exports.getMessages
 };
 //# sourceMappingURL=chatController.js.map

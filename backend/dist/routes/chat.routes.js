@@ -12,7 +12,9 @@ router.use(rateLimitMiddleware_1.rateLimit);
 router.use(rateLimitMiddleware_1.usageTracker);
 // Chat routes
 router.post('/message', chatController_1.sendMessage);
+router.post('/conversations', chatController_1.createConv);
 router.get('/conversations', chatController_1.getConversations);
+router.post('/conversations/:id/messages', chatController_1.sendMessageToConversation);
 router.get('/conversations/:id/messages', chatController_1.getMessages);
 exports.default = router;
 //# sourceMappingURL=chat.routes.js.map

@@ -63,6 +63,22 @@ export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
+ * Create a new conversation
+ * POST /api/chat/conversations
+ * Body: { type: 'chat' | 'agent', title?: string }
+ */
+export const createConv = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.id;
+    const { type = 'chat', title } = req.body;
+
+    const conversation = await createConversation(userId, type === 'agent' ? 'agent_mode' : 'quick_mode');
+
+    res.status(HTTP_STATUS.OK).json({
+        data: conversation
+    });
+});
+
+/**
  * Get user conversations
  * GET /api/chat/conversations
  */
@@ -75,6 +91,34 @@ export const getConversations = asyncHandler(async (req: Request, res: Response)
 
     res.status(HTTP_STATUS.OK).json({
         data: { conversations }
+    });
+});
+
+/**
+ * Send message to a conversation
+ * POST /api/chat/conversations/:id/messages
+ * Body: { content: string }
+ */
+export const sendMessageToConversation = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { content } = req.body;
+    const userId = req.user!.id;
+
+    if (!content) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+            error: 'Message content is required'
+        });
+        return;
+    }
+
+    // Save user message
+    await saveMessage(id, 'user', content);
+
+    res.status(HTTP_STATUS.OK).json({
+        data: {
+            message: 'Message saved',
+            conversationId: id
+        }
     });
 });
 
@@ -95,7 +139,9 @@ export const getMessages = asyncHandler(async (req: Request, res: Response) => {
 
 export default {
     sendMessage,
+    createConv,
     getConversations,
+    sendMessageToConversation,
     getMessages
 };
 
