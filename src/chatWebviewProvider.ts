@@ -369,7 +369,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   private _getHtmlForWebview(webview: vscode.Webview) {
-    const iconPath = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'icons', 'accessibility-white.svg'));
+    // Base64 encoded SVG icon (fixes display issues in webview)
+    const iconPath = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8Y2lyY2xlIGN4PSIxMiIgY3k9IjYiIHI9IjIiIGZpbGw9IndoaXRlIi8+CiAgPHBhdGggZD0iTTE2IDhIOEM3LjQ1IDggNyA4LjQ1IDcgOUM3IDkuNTUgNy40NSAxMCA4IDEwSDEwVjE2QzEwIDE2LjU1IDEwLjQ1IDE3IDExIDE3QzExLjU1IDE3IDEyIDE2LjU1IDEyIDE2VjEzSDEyVjE2QzEyIDE2LjU1IDEyLjQ1IDE3IDEzIDE3QzEzLjU1IDE3IDE0IDE2LjU1IDE0IDE2VjEwSDE2QzE2LjU1IDEwIDE3IDkuNTUgMTcgOUMxNyA4LjQ1IDE2LjU1IDggMTYgOFoiIGZpbGw9IndoaXRlIi8+CiAgPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMS41IiBmaWxsPSJub25lIi8+Cjwvc3ZnPiA=';
 
     return `<!DOCTYPE html>
       <html lang="en">
@@ -676,7 +677,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     <!-- Header with Logo and Controls -->
           <div class="header">
         <div class="logo-section">
-            <div style="font-size: 24px;">♿</div>
+            <img src="${iconPath}" alt="AccessLint" class="logo">
             <div class="title">AccessLint</div>
             </div>
         <div class="controls-section">
