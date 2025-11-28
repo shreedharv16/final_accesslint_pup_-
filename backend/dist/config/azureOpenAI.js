@@ -15,7 +15,7 @@ const logger_1 = __importDefault(require("../utils/logger"));
 const AZURE_OPENAI_ENDPOINT = 'https://ctonpsiotspocopenai.openai.azure.com/';
 const AZURE_OPENAI_API_KEY = 'BiG4E52GKPwmxv60QxNWxAmlUoKyUyUnDPGavAx5sWSE0MkcmjKDJQQJ99BKACHYHv6XJ3w3AAABACOGDm43';
 const AZURE_OPENAI_DEPLOYMENT = 'gpt-5';
-const AZURE_OPENAI_API_VERSION = '2024-02-15-preview';
+const AZURE_OPENAI_API_VERSION = '2025-01-01-preview';
 let openaiClient = null;
 /**
  * Initialize Azure OpenAI client with hardcoded credentials
