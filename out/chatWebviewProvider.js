@@ -697,7 +697,6 @@ class ChatWebviewProvider {
         const clearButton = document.getElementById('clearButton');
         const quickModeBtn = document.getElementById('quickMode');
         const agentModeBtn = document.getElementById('agentMode');
-        const configButton = document.getElementById('configButton');
         const contextButton = document.getElementById('contextButton');
         const contextContainer = document.getElementById('contextContainer');
         const contextFiles = document.getElementById('contextFiles');
@@ -834,21 +833,9 @@ class ChatWebviewProvider {
             updateTodoDropdownVisibility(mode);
         }
 
-        function configureApiKeys() {
-            vscode.postMessage({
-                type: 'configureApiKeys'
-            });
-        }
-
-        function setProvider(provider) {
-            currentProvider = provider;
-            addMessage(\`Switched to \${provider === 'gemini' ? 'Google Gemini' : provider === 'anthropic' ? 'Anthropic Claude' : 'OpenAI GPT'}\`, 'ai', new Date());
-        }
-
         // Event listeners
         sendButton.addEventListener('click', sendMessage);
         clearButton.addEventListener('click', clearChat);
-        configButton.addEventListener('click', configureApiKeys);
         contextButton.addEventListener('click', addContext);
         clearContextButton.addEventListener('click', clearContext);
         
