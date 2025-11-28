@@ -41,7 +41,7 @@ class ChatWebviewProvider {
         // Register the retry event listener
         retryUtils_1.RetryUtils.addRetryEventListener(this.retryEventListener);
     }
-    resolveWebviewView(webviewView, context, _token) {
+    async resolveWebviewView(webviewView, context, _token) {
         this._view = webviewView;
         webviewView.webview.options = {
             // Allow scripts in the webview
@@ -51,8 +51,10 @@ class ChatWebviewProvider {
             ]
         };
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+        // Load previous conversation if authenticated
+        await this._loadPreviousConversation();
         // Listen for messages from the webview
-        webviewView.webview.onDidReceiveMessage(message => {
+        webviewView.webview.onDidReceiveMessage(async (message) => {
             console.log('📨 Webview message received:', message);
             switch (message.type) {
                 case 'sendMessage':
@@ -61,7 +63,7 @@ class ChatWebviewProvider {
                     this._handleUserMessage(message.message, message.mode, message.provider, message.contextFiles);
                     break;
                 case 'clearChat':
-                    this._clearChat();
+                    await this._clearChat();
                     break;
                 case 'configureApiKeys':
                     this._configureApiKeys();
@@ -75,8 +77,42 @@ class ChatWebviewProvider {
                 case 'setMode':
                     this._handleModeChange(message.mode);
                     break;
+                case 'webviewReady':
+                    // Webview is ready, reload messages if we have a conversation
+                    await this._loadPreviousConversation();
+                    break;
             }
         }, undefined, this.context.subscriptions);
+    }
+    /**
+     * Load previous conversation from backend
+     */
+    async _loadPreviousConversation() {
+        if (!this._view || !this.backendApiClient.isAuthenticated()) {
+            return;
+        }
+        try {
+            // Get stored conversation ID
+            const storedConvId = this.context.globalState.get('currentConversationId');
+            if (storedConvId) {
+                // Load messages from backend
+                const messages = await this.backendApiClient.getChatMessages(storedConvId);
+                // Display messages in webview
+                for (const msg of messages) {
+                    this._view.webview.postMessage({
+                        type: msg.role === 'user' ? 'userMessage' : 'aiResponse',
+                        message: msg.content,
+                        timestamp: msg.createdAt
+                    });
+                }
+                this.currentConversationId = storedConvId;
+                console.log(`📜 Loaded ${messages.length} previous messages`);
+            }
+        }
+        catch (error) {
+            console.error('Failed to load previous conversation:', error);
+            // Continue without previous messages
+        }
     }
     async _handleUserMessage(userMessage, mode = 'quick', provider = 'gemini', contextFiles = []) {
         if (!this._view) {
@@ -115,6 +151,8 @@ class ChatWebviewProvider {
                 if (!this.currentConversationId) {
                     const conversation = await this.backendApiClient.createChatConversation(mode === 'agent' ? 'agent' : 'chat', `Chat - ${new Date().toLocaleString()}`);
                     this.currentConversationId = conversation.id;
+                    // Persist conversation ID
+                    await this.context.globalState.update('currentConversationId', conversation.id);
                 }
             }
             catch (error) {
@@ -169,6 +207,8 @@ class ChatWebviewProvider {
                     const backendResponse = await this.backendApiClient.sendChatMessageWithResponse(this.currentConversationId || null, fullMessage, 'quick_mode');
                     responseText = backendResponse.response;
                     this.currentConversationId = backendResponse.conversationId;
+                    // Persist conversation ID for later
+                    await this.context.globalState.update('currentConversationId', backendResponse.conversationId);
                     console.log(`✅ Backend response received (${backendResponse.tokensUsed} tokens)`);
                 }
                 catch (error) {
@@ -306,7 +346,7 @@ class ChatWebviewProvider {
             console.error('Error changing mode:', error);
         }
     }
-    _clearChat() {
+    async _clearChat() {
         if (this._view) {
             this._view.webview.postMessage({
                 type: 'clearChat'
@@ -314,6 +354,7 @@ class ChatWebviewProvider {
         }
         // Reset conversation ID for new conversation
         this.currentConversationId = undefined;
+        await this.context.globalState.update('currentConversationId', undefined);
     }
     postMessage(message) {
         if (this._view) {
@@ -325,8 +366,8 @@ class ChatWebviewProvider {
             this._view.show?.(true);
         }
     }
-    clearChat() {
-        this._clearChat();
+    async clearChat() {
+        await this._clearChat();
     }
     _getHtmlForWebview(webview) {
         // Base64 encoded SVG icon (fixes display issues in webview)
@@ -1109,6 +1150,11 @@ class ChatWebviewProvider {
 
         // Initialize todo dropdown after a small delay to ensure DOM is ready
         setTimeout(initTodoDropdown, 100);
+        
+        // Notify extension that webview is ready (to load previous messages)
+        setTimeout(() => {
+            vscode.postMessage({ type: 'webviewReady' });
+        }, 200);
     </script>
 </body>
 </html>`;

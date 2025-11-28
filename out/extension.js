@@ -181,8 +181,8 @@ async function activate(context) {
     const openChatCommand = vscode.commands.registerCommand('accesslint.openChat', () => {
         vscode.commands.executeCommand('accesslint.chatView.focus');
     });
-    const newChatSessionCommand = vscode.commands.registerCommand('accesslint.newChatSession', () => {
-        chatProvider.clearChat();
+    const newChatSessionCommand = vscode.commands.registerCommand('accesslint.newChatSession', async () => {
+        await chatProvider.clearChat();
         // Clear conversation history for all providers
         openaiChatProvider.newSession();
         debugChannel.appendLine('🆕 New chat session started - all conversation histories cleared');

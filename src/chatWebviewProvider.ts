@@ -35,7 +35,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     RetryUtils.addRetryEventListener(this.retryEventListener);
   }
 
-  public resolveWebviewView(
+  public async resolveWebviewView(
     webviewView: vscode.WebviewView,
     context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
@@ -52,9 +52,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
+    // Load previous conversation if authenticated
+    await this._loadPreviousConversation();
+
     // Listen for messages from the webview
     webviewView.webview.onDidReceiveMessage(
-      message => {
+      async message => {
         console.log('📨 Webview message received:', message);
         switch (message.type) {
           case 'sendMessage':
@@ -63,7 +66,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             this._handleUserMessage(message.message, message.mode, message.provider, message.contextFiles);
             break;
           case 'clearChat':
-            this._clearChat();
+            await this._clearChat();
             break;
           case 'configureApiKeys':
             this._configureApiKeys();
@@ -77,11 +80,49 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           case 'setMode':
             this._handleModeChange(message.mode);
             break;
+          case 'webviewReady':
+            // Webview is ready, reload messages if we have a conversation
+            await this._loadPreviousConversation();
+            break;
         }
       },
       undefined,
       this.context.subscriptions
     );
+  }
+
+  /**
+   * Load previous conversation from backend
+   */
+  private async _loadPreviousConversation() {
+    if (!this._view || !this.backendApiClient.isAuthenticated()) {
+      return;
+    }
+
+    try {
+      // Get stored conversation ID
+      const storedConvId = this.context.globalState.get<string>('currentConversationId');
+      
+      if (storedConvId) {
+        // Load messages from backend
+        const messages = await this.backendApiClient.getChatMessages(storedConvId);
+        
+        // Display messages in webview
+        for (const msg of messages) {
+          this._view.webview.postMessage({
+            type: msg.role === 'user' ? 'userMessage' : 'aiResponse',
+            message: msg.content,
+            timestamp: msg.createdAt
+          });
+        }
+        
+        this.currentConversationId = storedConvId;
+        console.log(`📜 Loaded ${messages.length} previous messages`);
+      }
+    } catch (error) {
+      console.error('Failed to load previous conversation:', error);
+      // Continue without previous messages
+    }
   }
 
   private async _handleUserMessage(userMessage: string, mode: string = 'quick', provider: string = 'gemini', contextFiles: string[] = []) {
@@ -132,6 +173,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             `Chat - ${new Date().toLocaleString()}`
           );
           this.currentConversationId = conversation.id;
+          
+          // Persist conversation ID
+          await this.context.globalState.update('currentConversationId', conversation.id);
         }
       } catch (error) {
         console.error('Failed to create conversation:', error);
@@ -193,6 +237,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           
           responseText = backendResponse.response;
           this.currentConversationId = backendResponse.conversationId;
+          
+          // Persist conversation ID for later
+          await this.context.globalState.update('currentConversationId', backendResponse.conversationId);
+          
           console.log(`✅ Backend response received (${backendResponse.tokensUsed} tokens)`);
         } catch (error) {
           console.error('❌ Backend call failed:', error);
@@ -342,7 +390,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private _clearChat() {
+  private async _clearChat() {
     if (this._view) {
       this._view.webview.postMessage({
         type: 'clearChat'
@@ -350,6 +398,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
     // Reset conversation ID for new conversation
     this.currentConversationId = undefined;
+    await this.context.globalState.update('currentConversationId', undefined);
   }
 
   public postMessage(message: any): void {
@@ -364,8 +413,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public clearChat(): void {
-    this._clearChat();
+  public async clearChat(): Promise<void> {
+    await this._clearChat();
   }
 
   private _getHtmlForWebview(webview: vscode.Webview) {
@@ -1150,6 +1199,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // Initialize todo dropdown after a small delay to ensure DOM is ready
         setTimeout(initTodoDropdown, 100);
+        
+        // Notify extension that webview is ready (to load previous messages)
+        setTimeout(() => {
+            vscode.postMessage({ type: 'webviewReady' });
+        }, 200);
     </script>
 </body>
 </html>`;
