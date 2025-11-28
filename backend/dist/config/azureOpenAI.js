@@ -56,7 +56,7 @@ async function chatCompletion(messages, options) {
         const response = await client.chat.completions.create({
             model: AZURE_OPENAI_DEPLOYMENT,
             messages,
-            max_tokens: options?.maxTokens || 4000,
+            max_completion_tokens: options?.maxTokens || 4000, // GPT-5 uses max_completion_tokens
             temperature: options?.temperature || 0.7,
             stream: false // Always use non-streaming mode
         });
