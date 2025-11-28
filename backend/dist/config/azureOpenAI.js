@@ -57,7 +57,7 @@ async function chatCompletion(messages, options) {
             model: AZURE_OPENAI_DEPLOYMENT,
             messages,
             max_completion_tokens: options?.maxTokens || 4000, // GPT-5 uses max_completion_tokens
-            temperature: options?.temperature || 0.7,
+            // GPT-5 only supports temperature=1 (default), so we omit it
             stream: false // Always use non-streaming mode
         });
         const content = response.choices[0]?.message?.content || '';
