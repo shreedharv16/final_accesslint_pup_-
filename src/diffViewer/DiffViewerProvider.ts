@@ -5,6 +5,7 @@ import { DiffApprovalRequest, DiffApprovalResponse, DiffViewerManager } from './
 export class DiffViewerProvider {
   private panel: vscode.WebviewPanel | undefined;
   private disposables: vscode.Disposable[] = [];
+  private pendingDiffRequest: any = null; // Store pending request until webview is ready
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -55,8 +56,8 @@ export class DiffViewerProvider {
     // Set webview content
     this.panel.webview.html = this.getWebviewContent();
 
-    // Send diff data to webview
-    this.panel.webview.postMessage({
+    // Store diff request to send once webview is ready
+    this.pendingDiffRequest = {
       type: 'showDiff',
       request: {
         id: request.id,
@@ -65,7 +66,7 @@ export class DiffViewerProvider {
         diff: request.diff,
         timestamp: request.timestamp.toISOString()
       }
-    });
+    };
   }
 
   /**
@@ -89,7 +90,12 @@ export class DiffViewerProvider {
         break;
         
       case 'ready':
-        // Webview is ready to receive data
+        // Webview is ready - send pending diff data
+        if (this.pendingDiffRequest && this.panel) {
+          console.log('📤 Webview ready, sending pending diff data');
+          this.panel.webview.postMessage(this.pendingDiffRequest);
+          this.pendingDiffRequest = null;
+        }
         break;
         
       default:
