@@ -23,10 +23,11 @@ export class ApiKeyManager {
   private static readonly DEFAULT_ANTHROPIC_MODEL = 'claude-3-7-sonnet-20250219';
   private static readonly DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
 
-  // Azure OpenAI configuration
-  private static readonly AZURE_RESOURCE = "ots-openai"; // Azure resource name
+  // Azure OpenAI configuration (HARDCODED for GPT-5)
+  private static readonly AZURE_RESOURCE = "ctonpsiotspocopenai"; // Azure resource name
   private static readonly AZURE_DEPLOYMENT = "gpt-5";   // Azure deployment name
   private static readonly AZURE_API_VERSION = "2025-01-01-preview";
+  private static readonly AZURE_API_KEY = "BiG4E52GKPwmxv60QxNWxAmlUoKyUyUnDPGavAx5sWSE0MkcmjKDJQQJ99BKACHYHv6XJ3w3AAABACOGDm43"; // Hardcoded API key
   private static readonly AZURE_ENDPOINT = `https://${ApiKeyManager.AZURE_RESOURCE}.openai.azure.com/openai/deployments/${ApiKeyManager.AZURE_DEPLOYMENT}/chat/completions?api-version=${ApiKeyManager.AZURE_API_VERSION}`;
 
   constructor(private context: vscode.ExtensionContext) {}
@@ -57,17 +58,20 @@ export class ApiKeyManager {
     await this.context.globalState.update(ApiKeyManager.ANTHROPIC_API_KEY, undefined);
   }
 
-  // OpenAI API Key Management
+  // OpenAI API Key Management (HARDCODED for GPT-5)
   async getOpenAIApiKey(): Promise<string | undefined> {
-    return this.context.globalState.get<string>(ApiKeyManager.OPENAI_API_KEY);
+    // Return hardcoded API key for GPT-5
+    return ApiKeyManager.AZURE_API_KEY;
   }
 
   async setOpenAIApiKey(apiKey: string): Promise<void> {
-    await this.context.globalState.update(ApiKeyManager.OPENAI_API_KEY, apiKey);
+    // No-op: API key is hardcoded
+    console.log('⚠️ API key is hardcoded, cannot be changed from extension');
   }
 
   async clearOpenAIApiKey(): Promise<void> {
-    await this.context.globalState.update(ApiKeyManager.OPENAI_API_KEY, undefined);
+    // No-op: API key is hardcoded
+    console.log('⚠️ API key is hardcoded, cannot be cleared from extension');
   }
 
   // Azure OpenAI Configuration
@@ -147,10 +151,10 @@ export class ApiKeyManager {
     return !!apiKey && apiKey.trim().length > 0;
   }
 
-  // Check if OpenAI is configured
+  // Check if OpenAI is configured (always true since hardcoded)
   async isOpenAIConfigured(): Promise<boolean> {
-    const apiKey = await this.getOpenAIApiKey();
-    return !!apiKey && apiKey.trim().length > 0;
+    // Always return true since API key is hardcoded
+    return true;
   }
 
   // Configure Gemini API Key via UI
