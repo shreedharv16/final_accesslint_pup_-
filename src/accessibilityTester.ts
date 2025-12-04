@@ -106,11 +106,23 @@ export class AccessibilityTester {
             this.outputChannel.appendLine('   This may take a moment on first launch...');
             
             try {
-                this.browser = await chromium.launch({ 
+                // Try to use system Chrome/Edge if Playwright browsers not installed
+                // This helps in corporate environments where browser downloads are blocked
+                const launchOptions: any = {
                     headless: false,
                     timeout: 60000,
-                    args: ['--no-sandbox', '--disable-setuid-sandbox'] // Helps with permissions
-                });
+                    args: ['--no-sandbox', '--disable-setuid-sandbox']
+                };
+                
+                // Check if we should use system browser (for corporate environments)
+                // Set environment variable: ACCESSLINT_USE_SYSTEM_BROWSER=chrome or edge
+                const useSystemBrowser = process.env.ACCESSLINT_USE_SYSTEM_BROWSER;
+                if (useSystemBrowser) {
+                    launchOptions.channel = useSystemBrowser; // 'chrome' or 'msedge'
+                    this.outputChannel.appendLine(`   Using system browser: ${useSystemBrowser}`);
+                }
+                
+                this.browser = await chromium.launch(launchOptions);
                 
                 if (!this.browser) {
                     throw new Error('Browser failed to launch (returned null)');
