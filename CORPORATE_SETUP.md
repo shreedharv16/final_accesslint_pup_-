@@ -8,28 +8,54 @@ This guide is specifically for setting up AccessLint in **corporate/restricted e
 
 ---
 
+## ❓ What Does Installing `@guidepup/guidepup` Actually Do?
+
+Installing the npm package `@guidepup/guidepup` gives you:
+- ✅ **Node.js library** to control NVDA programmatically
+- ✅ **Functions like** `nvda.start()`, `nvda.stop()`, `nvda.next()`, etc.
+- ✅ **Installed in** `node_modules/@guidepup/guidepup/`
+
+**What it does NOT do:**
+- ❌ Does **NOT** install NVDA itself (you need NVDA separately)
+- ❌ Does **NOT** configure where NVDA is located
+- ❌ Does **NOT** set environment variables
+
+**Analogy:**
+- Installing `@guidepup/guidepup` = Installing the **remote control app** 📱
+- You still need the **actual NVDA software** 📺
+- And you need to tell the app **where to find NVDA** (via `GUIDEPUP_NVDA_PATH`) 🔗
+
+---
+
 ## 🚨 Common Corporate Environment Issues
 
 ### Issue 1: NVDA in Non-Standard Location
-**Problem:** NVDA installed in `C:\temp\nvda\` instead of `C:\Program Files (x86)\NVDA\`
+**Problem:** NVDA installed in `C:\temp\nvda_2022.4\` (or similar versioned folder) instead of `C:\Program Files (x86)\NVDA\`
 
 **Solution:**
 
 ```powershell
-# Find your NVDA executable
-Get-ChildItem C:\temp -Recurse -Filter "nvda.exe" | Select-Object FullName
+# Find your NVDA executable (check versioned folders like nvda_2022.4)
+dir C:\temp\nvda*\*.exe
 
-# Example output: C:\temp\nvda\nvda.exe
+# Common locations:
+# C:\temp\nvda_2022.4\nvda.exe
+# C:\temp\nvda_2022.4\nvda_launcher.exe
 
-# Set environment variable (replace path with your actual path)
-$env:GUIDEPUP_NVDA_PATH = "C:\temp\nvda\nvda.exe"
+# OR search recursively:
+Get-ChildItem C:\temp -Recurse -Filter "nvda*.exe" | Select-Object FullName
 
-# Make it permanent (run PowerShell as Admin)
-[System.Environment]::SetEnvironmentVariable('GUIDEPUP_NVDA_PATH', 'C:\temp\nvda\nvda.exe', 'User')
+# Set environment variable (replace path with YOUR ACTUAL PATH)
+$env:GUIDEPUP_NVDA_PATH = "C:\temp\nvda_2022.4\nvda.exe"
+
+# Make it permanent (run PowerShell as Admin if needed)
+[System.Environment]::SetEnvironmentVariable('GUIDEPUP_NVDA_PATH', 'C:\temp\nvda_2022.4\nvda.exe', 'User')
 
 # Verify it's set
 echo $env:GUIDEPUP_NVDA_PATH
 ```
+
+**Note:** If the executable is called `nvda_launcher.exe`, use that path instead.
 
 **Alternative: Add to System PATH**
 

@@ -31,13 +31,24 @@ if ($env:GUIDEPUP_NVDA_PATH) {
 } else {
     Write-Host " ⚠️  Not set - Searching for NVDA..." -ForegroundColor Yellow
     
-    # Search common locations
+    # Search common locations (including versioned folders)
     $nvdaLocations = @(
+        "C:\temp\nvda_2022.4\nvda.exe",
+        "C:\temp\nvda_2022.4\nvda_launcher.exe",
         "C:\temp\nvda\nvda.exe",
         "C:\temp\nvda.exe",
         "C:\Program Files (x86)\NVDA\nvda.exe",
         "C:\Program Files\NVDA\nvda.exe"
     )
+    
+    # Also search for any NVDA folder with version number
+    if (Test-Path "C:\temp") {
+        $nvdaFolders = Get-ChildItem "C:\temp" -Directory -Filter "nvda*" -ErrorAction SilentlyContinue
+        foreach ($folder in $nvdaFolders) {
+            $nvdaLocations += Join-Path $folder.FullName "nvda.exe"
+            $nvdaLocations += Join-Path $folder.FullName "nvda_launcher.exe"
+        }
+    }
     
     $found = $false
     foreach ($loc in $nvdaLocations) {
